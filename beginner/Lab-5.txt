@@ -1,0 +1,189 @@
+# Abschlussprojekt: Vom Sensorwert zur Cloud
+
+Einsteiger-Workshop · 60 Minuten · 15:00–16:00 Uhr
+
+In diesem letzten Teil wenden die Teilnehmenden das Gelernte selbstständig an. Sie erstellen eine kleine IoT-Demo, bei der ein Messwert erfasst, als JSON-Nutzlast aufbereitet und über das nRF93M1 DK an nRF Cloud übertragen wird.
+
+Projektziel: Jede Person demonstriert einen vollständigen Datenfluss – vom erzeugten Messwert bis zum nachvollziehbaren Cloud-Ereignis.
+
+Wir halten den Umfang bewusst klein: Es geht nicht darum, innerhalb einer Stunde einen produktionsreifen Sensortreiber zu schreiben, sondern die Mobilfunkverbindung, den Host und den Cloud-Transport zu einem funktionierenden Gesamtsystem zusammenzuführen.
+
+## 1. Aufgabenstellung
+
+[nRF93M1 Development Kit - nordicsemi.com](https://images.openai.com/static-rsc-4/pbqgN5sZF4HEJwIu59LSudtnJ_hQDNTakBnG7XnYs8ZV_9a3SOvIUF2VYMz7xhQXHzQcb97R0-xi3byjk53A5USJEoRSJRt3Es98cWLBNVYSN9n6Z0pwnbnwLGlZc2L7bocFlH1rw19Jr7nk0e9FTiq7ryr9zwJY0njm5R-88Po?purpose=inline)
+
+### Mini-Projekt: Cellular Telemetry Demo
+
+Die Anwendung erzeugt einen Messwert, beispielsweise eine simulierte Temperatur oder einen Zählerstand, sendet ihn über das Modem und weist den Empfang in nRF Cloud nach.
+
+Mindestanforderungen
+
+- Ein definierter Messwert oder Zählerstand
+- Ein gültiger JSON-Payload
+- Übertragung über das nRF93M1
+- Prüfung der Modem- beziehungsweise Cloud-Rückmeldung
+- Dokumentierter Nachweis der übertragenen Daten
+
+## 2. Zeitplan für die Abschlussstunde
+
+### 15:00
+
+Projekt auswählen und planen
+
+Die Teilnehmenden wählen Temperatur, Zählerstand oder einen anderen simulierten Messwert.
+
+### 15:10
+
+Payload erstellen
+
+Messwert und Gerätekennung festlegen und eine JSON-Nachricht vorbereiten.
+
+### 15:20
+
+Nachricht übertragen
+
+Nachricht über den AT-Zugang oder die laufende Host-Anwendung senden.
+
+### 15:35
+
+Cloud-Nachweis erbringen
+
+Rückmeldung und Geräteansicht prüfen, Ergebnis dokumentieren.
+
+### 15:50
+
+Demo und Lessons Learned
+
+Jede Person präsentiert kurz den Datenfluss und eine Erkenntnis aus der Fehlersuche.
+
+## 3. Arbeitsblatt für Teilnehmende
+
+### Schritt A – Messwert festlegen
+
+Wählt einen Messwert für eure Demo. Es ist keine zusätzliche Sensorhardware erforderlich; ein simulierter Wert reicht aus.
+
+### Eure Telemetrie konfigurieren
+
+Projektart
+
+Temperatur
+
+Zählerstand
+
+Gerätestatus
+
+Gerätekennung für die Nutzdaten
+
+Messwert
+
+Einheit oder Beschreibung
+
+Erzeugter JSON-Payload
+
+{"appId":"WORKSHOP","data":{"device":"team-01","type":"temperature","value":"23.7","unit":"C"}}
+
+&#x20;JSON kopieren
+
+### Schritt B – Nachricht senden
+
+Öffnet das AT-Terminal des Modems und verwendet die vorbereitete Nachricht als Nutzlast:
+
+```
+AT%NRFCLOUDMESSAGE={"appId":"WORKSHOP","data":{"device":"team-01","type":"temperature","value":"23.7","unit":"C"}}
+```
+
+Das ist ein Beispiel für die JSON-Nachricht. Vor dem Workshop muss die genaue AT-Syntax mit der verwendeten Modem-Firmware getestet werden. Die offizielle Nordic-Dokumentation beschreibt `AT%NRFCLOUDMESSAGE` zum Veröffentlichen eines JSON-Payloads über nRF Cloud.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://nrfconnectdocs.nordicsemi.com\&sz=32)
+
+nRF Connect SDK 3.4.99 documentation+1
+
+
+
+Wenn ihr in Lab 4 die Host-Anwendung verwendet habt: Übertragt das Prinzip in die Anwendung, statt die Nachricht dauerhaft manuell über das Terminal zu senden. Die Host-Anwendung sollte den Messwert vorbereiten, den passenden AT-Befehl auslösen und das Ergebnis auswerten.
+
+Wenn der Host-Code noch nicht angepasst wurde: Sendet die Nachricht manuell und kennzeichnet die Demo als AT-basierte Variante. So bleibt das Projekt auch dann erfolgreich, wenn die Host-Code-Anpassung länger dauert.
+
+### Schritt C – Erfolg überprüfen
+
+- Prüft im Terminal die AT-Antwort und die asynchrone `%COAP:`-Meldung.
+- Öffnet das richtige Gerät in nRF Cloud.
+- Sucht nach dem entsprechenden Nachrichtenereignis.
+- Dokumentiert, was tatsächlich empfangen wurde.
+
+Der nRF93M1 führt den Cloud-Client in seiner Modem-Firmware aus; Cloud-Transaktionen erzeugen `%COAP:`-Statusmeldungen. Eine erfolgreiche Transportantwort ist daher ein wichtiger Teil des Nachweises.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://nrfconnectdocs.nordicsemi.com\&sz=32)
+
+nRF Connect SDK 3.4.99 documentation
+
+
+
+## 4. Erweiterungen für schnelle Teilnehmende
+
+Wer die Mindestanforderungen früh erfüllt, kann eine Erweiterung wählen:
+
+[Thermo 22 Click](https://images.openai.com/static-rsc-4/TupHgRyf7ASwzDDsHi5XDxO9J779j-tH4VCZl-tOV8tSC_W7m-VMYGuHuKwKq2d6eWTxpwunk-Qsbl5fxStPT7403Bx_3ZlDW8MyakHmo8gynF7i_4HjXz5UMm7Hd84ufPYGaRHSFoF47wlKSQZ782KjFiwT-tIyL9GXRG5nEuY?purpose=inline)
+
+A. Zwei Messwerte senden
+
+Temperatur und einen zweiten Wert wie einen Zählerstand in einer gemeinsamen Nutzlast übertragen.
+
+[How to Build a Firmware Logging System in C (STM32 Beginner’s Guide) | by Ayush Dixit | Feb, 2026 | Medium](https://images.openai.com/static-rsc-4/HiazfG9EyQlG-ywwkFUMZPXgO9PPlOdNpeiUhM5iaMm4E7-yZsRLGdISCCEGF_obvnp9t_orwhZvip6qbGF_rnk75UJaFpwJgF6TltMTFmYVeDs-HHcnsBgN69_7rCmShL_2i5COD-95uijeaemvOBUx7bHohf7aESGaRTRSc_4?purpose=inline)
+
+B. Fehler gezielt behandeln
+
+Einen ungültigen Payload oder eine nicht verfügbare Verbindung untersuchen und eine sinnvolle Fehlermeldung ergänzen.
+
+[Real-Time Flood Monitoring Solutions](https://images.openai.com/static-rsc-4/JjxtaY1Tl0TZfSOkVcNDATY9gS-6ACexhzEy0KVEjdBsmFm02YcFe-sEhVFxNpdQcTVP0fCc7zmKjXkYwRR7AhHY5xGvXzEoSWaDlaNIC42CizaqdAwVaK6qAIRLihjeNFD821D6950t_Z27MXRPc6dhYODYWtscVd5GXsYJOA8?purpose=inline)
+
+C. Regelmäßige Übertragung
+
+Einen periodischen Ablauf konzipieren, beispielsweise eine Nachricht alle 60 Sekunden. Bei der Umsetzung auf geeignete Schlaf- und Energiesparzustände achten.
+
+## 5. Abschlussbewertung
+
+Ein sinnvoller Messwert oder Gerätestatus wurde definiert.
+
+Eine gültige JSON-Nutzlast wurde erstellt.
+
+Die Nachricht wurde über das nRF93M1 gesendet.
+
+Die Modem- beziehungsweise Cloud-Rückmeldung wurde ausgewertet.
+
+Der Cloud-Nachweis wurde dokumentiert.
+
+Die Teilnehmenden können Host, Modem und Cloud voneinander unterscheiden.
+
+0 von 6 erfüllt
+
+In Arbeit
+
+## 6. Abschlussrunde: drei Fragen an die Gruppe
+
+1. Welche Funktion übernimmt der nRF93M1, und welche der nRF54L15?
+2. Warum ist ein `OK` auf ein AT-Kommando noch kein Beweis für eine erfolgreich zugestellte Cloud-Nachricht?
+3. Welche Information würdet ihr zusätzlich in eure Telemetrie aufnehmen, um ein Gerät im Feld besser diagnostizieren zu können?
+
+Mögliche Antworten sind: die Trennung von Host-Anwendung und Modem-Stack, die asynchrone CoAP-Rückmeldung sowie Firmwareversion, Zeitstempel, Gerätekennung oder ein Fehlerstatus.
+
+## 7. Was die Teilnehmenden nach sechs Stunden mitnehmen
+
+Am Ende des Workshops sollten die Einsteiger:
+
+- die grundlegende LTE-Cat-1-bis-Architektur verstehen,
+- das Modem über AT-Kommandos bedienen,
+- den LTE-Registrierungsstatus interpretieren,
+- ein Gerät in nRF Cloud provisionieren,
+- eine erste Nachricht übertragen und verifizieren,
+- die Rolle der Host-Firmware auf dem nRF54L15 verstehen.
+
+Für den nächsten Workshop – die Fortgeschrittenen-Variante – bieten sich dann Themen wie robuste AT-Parser, Zustandsautomaten, UART-Flusskontrolle, PPP über CMUX, Fehlerbehandlung, Energiemanagement und Firmware-Updates an. Die offizielle Nordic-Dokumentation beschreibt sowohl das AT-basierte als auch das PPP-basierte Integrationsmodell.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://nrfconnectdocs.nordicsemi.com\&sz=32)
+
+nRF Connect SDK 3.4.99 documentation+2
+
+
+
+Damit ist der Einsteiger-Workshop inhaltlich von der Einführung bis zur Abschlussdemo strukturiert.

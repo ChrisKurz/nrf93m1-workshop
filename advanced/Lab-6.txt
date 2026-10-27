@@ -1,0 +1,259 @@
+# Advanced Workshop – Lab 6: Energieverbrauch und Feldeinsatz
+
+14:00–15:00 Uhr · Dauer: 60 Minuten · Nordic nRF93M1 DK / nRF54L15
+
+Ziel: Die Teilnehmenden entwickeln eine energieeffiziente Betriebsstrategie für ein Cellular-IoT-Gerät. Sie messen oder vergleichen den Stromverbrauch verschiedener Betriebszustände, implementieren kontrolliertes Sleep/Wake-up und lernen, wie sich lange Registrierungszeiten, schlechte Funkbedingungen und häufige Reconnects auf die Batterielaufzeit auswirken.
+
+Der wichtigste Grundsatz: Nicht nur den Strom im Sleep messen – den Energieverbrauch eines vollständigen Arbeitszyklus optimieren. Ein Gerät, das tief schläft, aber für jede Messung erneut lange nach einem Netz sucht, kann mehr Energie verbrauchen als ein Gerät, das seinen Verbindungszustand sinnvoll erhält.
+
+## 1. Lernziele
+
+Nach diesem Lab können die Teilnehmenden:
+
+- die Modem-Funktionalitätslevel unterscheiden;
+- Modem-Energiezustände von Host-Sleep-Zuständen abgrenzen;
+- einen Mess- und Übertragungszyklus mit kontrolliertem Wake-up entwerfen;
+- den Einfluss von Netzabdeckung, Reconnects und Sendeintervallen bewerten;
+- eine einfache Abschätzung des durchschnittlichen Stromverbrauchs erstellen.
+
+## 2. Betriebszustände des nRF93M1
+
+Die AT-Funktionalitätslevel beeinflussen die Funkfunktion des Modems. Sie sind nicht dasselbe wie der Sleep-Modus des Host-Mikrocontrollers.
+
+| Kommando    | Bedeutung                                 | Typischer Einsatz                                                                        |
+| ----------- | ----------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `AT+CFUN=0` | Minimale Funktionalität, Funk deaktiviert | Funk bewusst abschalten                                                                  |
+| `AT+CFUN=1` | Volle Funktionalität                      | Registrierung und Datenübertragung                                                       |
+| `AT+CFUN=4` | Flugmodus, Funkübertragung deaktiviert    | Funk deaktivieren, ohne alle Funktionen gleichzusetzen mit einem vollständigen Power-off |
+
+Der nRF93M1 startet standardmäßig mit `AT+CFUN=0`. Eine Anwendung sollte die Funkfunktion daher bewusst aktivieren, wenn sie Netzwerkzugriff benötigt.&#x20;
+
+Achtung: `CFUN=0`, ein Host-Sleep und ein vollständiges Ausschalten des Modems sind unterschiedliche Zustände. Sie unterscheiden sich in Wiederanlaufzeit, Erreichbarkeit und Energiebedarf. Vor der Implementierung müssen die unterstützten Zustände und deren Verhalten anhand der Modem-Firmware dokumentiert werden.
+
+## 3. Lab 6A – Konfiguriere Power Saving
+
+Der nRF93M1 verwaltet seine internen Schlafzustände automatisch anhand des Modemzustands und der konfigurierten Power-Saving-Parameter. Der Host wählt keinen einzelnen internen Sleep-Level direkt aus. Für den normalen System-ON-Betrieb ist `autoPowerSave` ein wichtiger Parameter. Er ist nach einem Reset erneut zu konfigurieren.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://nrfconnectdocs.nordicsemi.com\&sz=32)
+
+nRF Connect SDK 3.4.99 documentation+1
+
+
+
+### Versuch 1: Power Saving aktivieren
+
+Führe die Befehle im AT-Terminal aus, während das Modem erreichbar ist:
+
+```
+AT+IPR=9600
+AT%MODULECFG="ledMode",0
+AT%MODULECFG="logCtrl",0
+AT%MODULECFG="autoPowerSave",1
+```
+
+Prüfe nach jedem Befehl die Rückmeldung. Achtung: `AT+IPR=9600` ändert die UART-Baudrate. Stelle das Terminal danach ebenfalls auf 9600 Baud um. Die übrigen Parameter sollten auf dem konkreten Firmwarestand validiert werden.
+
+- `ledMode`: Status-LEDs deaktivieren.
+- `logCtrl`: Modem-Logausgabe deaktivieren.
+- `autoPowerSave`: automatisches Power Saving aktivieren.
+
+Für die finale Anwendung nicht blind sämtliche Diagnosefunktionen deaktivieren: Während der Entwicklung sind Logs oft wichtig. `logCtrl=0` kann auch diagnostische Daten unterdrücken, die für die Fehlersuche benötigt werden.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://nrfconnectdocs.nordicsemi.com\&sz=32)
+
+nRF Connect SDK 3.4.99 documentation+1
+
+
+
+### Versuch 2: Sleep-Verhalten beobachten
+
+Beobachte die URC:
+
+```
+%SLEEPMODE: <mode>
+```
+
+Die wichtigsten Werte sind:
+
+| Wert | Bedeutung                              |
+| ---- | -------------------------------------- |
+| `0`  | System ON aktiv                        |
+| `2`  | System ON Idle mit Power Saving        |
+| `3`  | System ON Idle mit tiefem Power Saving |
+| `4`  | System OFF                             |
+
+Wenn das Modem nach jeder Messung sofort wieder aktiv wird, prüfe, ob die Host-Anwendung ständig AT-Kommandos abfragt, URCs unnötig aktiviert oder USB das Modul wach hält. Das Modem kann erst nach dem Attach in den normalen netzwerkbasierten Power-Saving-Betrieb wechseln.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://nrfconnectdocs.nordicsemi.com\&sz=32)
+
+nRF Connect SDK 3.4.99 documentation+1
+
+
+
+## 4. Lab 6B – Sleep/Wake-up richtig planen
+
+Es gibt drei wichtige systemweite Betriebsmodi:
+
+System ON
+
+Netzwerkregistrierung, Sitzungen und laufende Zustände bleiben erhalten. Das Modul kann innerhalb dieses Modus automatisch schlafen und wieder aufwachen.
+
+System OFF
+
+Netzwerkregistrierung und konfigurierte Wake-up-Quellen bleiben erhalten, SRAM-Inhalt und laufende Aufgaben dagegen nicht. Dieser Modus muss explizit aktiviert werden.
+
+System Disabled
+
+Kein Zustand wird erhalten; das Modem wird deregistriert. Das Aufwecken erfordert die POWERKEY-Sequenz und einen vollständigen Boot- und Attach-Vorgang.
+
+Diese Unterschiede sind entscheidend für die Produktarchitektur. `AT%POWD` führt zu System Disabled und ist nicht gleichbedeutend mit `AT%SYSOFF=1`.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://nrfconnectdocs.nordicsemi.com\&sz=32)
+
+nRF Connect SDK 3.4.99 documentation+1
+
+
+
+### Wake-up-Signale
+
+- DTR: Der Host kann das Modem aus Power-Saving-Sleep aufwecken; dieser Weg ist unabhängig von der Baudrate.
+- RI (Ring Indicator): Das Modem kann den Host signalisieren, wenn Daten oder ein Ereignis Aufmerksamkeit erfordern.
+- POWERKEY: Dient zum Einschalten aus System Disabled; das ist ein vollständiger Neustart und kein schneller Wake-up.
+
+Wenn das System mit 115200 Baud arbeiten muss, sollte die Wake-up-Strategie entsprechend ausgelegt werden. Der Wake-up über eingehende UART-Daten setzt für System OFF eine UART-Konfiguration von 9600 Baud oder weniger voraus; DTR ist der vorgesehene baudratenunabhängige Wake-Pfad.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://nrfconnectdocs.nordicsemi.com\&sz=32)
+
+nRF Connect SDK 3.4.99 documentation+1
+
+
+
+## 5. Lab 6C – Energie messen statt nur vermuten
+
+Verwende nach Möglichkeit ein Power Profiler Kit II (PPK2), um den Modulstrom über einen vollständigen Arbeitszyklus aufzuzeichnen. Messe getrennt:
+
+1. Schlaf- bzw. Idle-Phase;
+2. Aufwachphase;
+3. Netzregistrierung oder Reconnect;
+4. Datenübertragung;
+5. Rückkehr in den Sleep-Zustand.
+
+Die typische Stromaufnahme hängt stark vom Betriebszustand und den Netzparametern ab. Nordic nennt für bestimmte nRF93M1-LABA-Testbedingungen beispielsweise ungefähr 2,2 µA als PSM-Floor, 25 µA als PSM-Zyklusmittelwert bei angegebenen Netzparametern und deutlich höhere Werte während aktiver Übertragung. Diese Werte sind keine Garantie für ein reales Produkt.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://docs.nordicsemi.com\&sz=32)
+
+Nordic Semiconductor+1
+
+
+
+### Durchschnittsstrom berechnen
+
+Für einen Zyklus mit mehreren Zuständen gilt:
+
+\\[ I\_{\text{avg}}=\frac{\sum_i I_i\\,t_i}{\sum_i t_i} \\]
+
+Beispiel: Ein Gerät verbringt 99 % seiner Zeit bei 20 µA und 1 % bei 100 mA. Dann ist der mittlere Strom:
+
+\\[ I\_{\text{avg}}=0{,}99\cdot20+0{,}01\cdot100000 =1019{,}8\ \mu A \\]
+
+Das sind rund 1,02 mA – obwohl der Strom während fast des gesamten Zyklus nur 20 µA beträgt.
+
+### Interaktiver Duty-Cycle-Rechner
+
+Passe die Werte an deinen Messzyklus an. Aktiver Strom wird in mA, Schlafstrom in µA eingegeben.
+
+Schlafstrom
+
+### 20 µA
+
+Aktiver Strom
+
+### 100 mA
+
+Zeitanteil aktiv
+
+### 1%
+
+Berechneter mittlerer Strom
+
+# 1.019,8 µA
+
+Idealisiertes Modell ohne zusätzliche Host-, Regler-, Batterie- oder Selbstentladungsverluste.
+
+## 6. Lab 6D – Feldbetrieb und Diagnose
+
+Ein Gerät, das im Labor gut funktioniert, kann im Feld durch schlechte Abdeckung, häufige Registrierungsversuche, hohe Temperatur oder Versorgungseinbrüche deutlich mehr Energie verbrauchen.
+
+Sinnvolle Diagnosekommandos während des aktiven Modemzustands sind:
+
+```
+AT+CEREG?
+AT+CESQ
+AT%ADC="vbat"
+AT%ADC="temp"
+```
+
+`AT%ADC="vbat"` liefert die gemessene Modulversorgungsspannung in mV; `AT%ADC="temp"` liefert die interne Modemtemperatur. Die ADC- und Alarmfunktionen sind nur im aktiven System-ON-Zustand verfügbar und stehen während Power-Saving-Sleep nicht durchgehend zur Verfügung.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://docs.nordicsemi.com\&sz=32)
+
+Nordic Semiconductor+1
+
+
+
+### Fehlerfälle für die Teams
+
+- Modem schläft nicht: Prüfe `autoPowerSave`, Attach-Status, USB, DTR und zu häufiges Polling.
+- Batterielaufzeit ist schlechter als berechnet: Ermittle den realen Zyklusmittelwert und berücksichtige Netzsuche, Reconnects und aktive Sendephasen.
+- Host schläft, aber Downlink-Ereignisse gehen verloren: Prüfe RI, DTR und das Wake-up-Konzept.
+- Nach einem Reset steigt der Stromverbrauch: Prüfe, ob `autoPowerSave` erneut gesetzt wurde.
+- PPP-System verbraucht zu viel Energie: Bewerte, ob der Host-IP-Stack wirklich erforderlich ist. Nordic empfiehlt für kleine batteriebetriebene Designs das AT-Modell, wenn keine Host-Sockets benötigt werden.&#x20;
+
+  [image](https://www.google.com/s2/favicons?domain=https://nrfconnectdocs.nordicsemi.com\&sz=32)
+
+  nRF Connect SDK 3.4.99 documentation+1
+
+
+
+## 7. Zeitplan für die 60 Minuten
+
+### 0–10
+
+Min.
+
+Betriebsmodi und Power-Saving-Architektur
+
+### 10–25
+
+Min.
+
+Konfiguration und Sleep-URCs
+
+### 25–40
+
+Min.
+
+Wake-up-Konzept und Strommessung
+
+### 40–52
+
+Min.
+
+Feldfehler und Diagnose
+
+### 52–60
+
+Min.
+
+Review und Abnahmekriterien
+
+### Abnahmekriterien
+
+- Die Teilnehmenden können System ON, System OFF und System Disabled erklären.
+- `autoPowerSave` ist aktiviert und sein Verhalten wird beobachtet.
+- Der Wake-up-Pfad über DTR, RI oder POWERKEY ist dokumentiert.
+- Der durchschnittliche Stromverbrauch wird anhand des vollständigen Zyklus bewertet.
+- Die Diagnose berücksichtigt Netzabdeckung, Reconnects und Versorgung.
+- Die Anwendung aktiviert Power Saving nach einem Reset erneut.
+
+Übergang zum Abschlussprojekt (15:00–16:00 Uhr): Im letzten Lab bekommen die Teams einen simulierten Feldausfall. Sie sollen Diagnoseinformationen sammeln, eine Recovery-Strategie implementieren und anschließend eine erfolgreiche Datenübertragung nachweisen.

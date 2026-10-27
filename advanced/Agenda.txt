@@ -1,0 +1,163 @@
+Engineering Cellular IoT: Modem Control to Cloud
+Zielgruppe: Embedded- und Firmware-Entwickler mit C-, Debugging- und idealerweise RTOS-Erfahrung.
+65–70 % Hands-on
+nRF Connect SDK / Zephyr
+Architektur und Robustheit
+
+
+Für diesen Track würde ich das nRF93M1 DK gezielt als Host-plus-Modem-System behandeln. Die Teilnehmer arbeiten auf dem nRF54L15 und entwickeln die Host-Anwendung; die LTE-Protokollschicht und der nRF-Cloud-Client verbleiben im Modem. Nordic stellt sowohl einen AT-basierten Einstieg als auch eine PPP-Host-Anwendung für das nRF93M1 DK bereit. 
+nRF Connect SDK 3.4.99 documentation+2
+
+Agenda mit konkreten Übungen
+00:00
+20 Min.
+
+1. Systemarchitektur und technischer Einstieg
+- Host-MCU, Modem-Firmware und serielle Schnittstelle
+- Modem-AT-API versus PPP-Datenpfad
+- Aufgabenverteilung zwischen Host und Modem
+- Beispielarchitektur und Zielanforderungen
+Hands-on: Referenzprojekt bauen, flashen und die Modemkommunikation nachvollziehen.
+
+Ergebnis: Alle Entwickler können das Projekt reproduzieren und kennen die relevanten Softwaremodule.
+
+
+
+00:20
+50 Min.
+
+2. AT-Integration und asynchrone Ereignisse
+- AT-Command-Request/Response-Zyklen
+- Unsolicited Result Codes (URCs)
+- Timeouts, Fehlercodes und serielle Schnittstellen
+- Trennung von Transport, Modemsteuerung und Applikationslogik
+Hands-on: Einen einfachen, robusten Modem-Wrapper ergänzen oder eine vorhandene Implementierung refaktorieren. Dabei Antworten und asynchrone Events sauber voneinander trennen.
+
+Ergebnis: Eine nachvollziehbare Modem-API mit Fehlerbehandlung.
+
+
+
+01:10
+60 Min.
+
+3. nRF Cloud: Provisionierung und Messaging aus Firmware
+- Geräteidentität, Registrierung und Authentifizierung
+- %NRFCLOUDMESSAGE und %COAP:-Statusmeldungen
+- JSON-Payloads und Ergebnisvalidierung
+- Wiederholungsstrategie und Fehlerbehandlung
+Hands-on: Die Host-Anwendung sendet eine strukturierte Nachricht mit Geräte- oder Anwendungsstatus an nRF Cloud. Die Teilnehmer ergänzen Statusauswertung und kontrolliertes Fehlerhandling.
+
+Ergebnis: Eine reproduzierbare Cloud-Integration mit überprüfbarem Status.
+
+
+
+02:10
+15 Min.
+
+Pause
+
+
+02:25
+60 Min.
+
+4. Zustandsmaschine und Recovery
+- Zustände für Initialisierung, Registrierung, Cloud-Verbindung und Fehler
+- Umgang mit Netzverlust und erneuter Registrierung
+- Timeout-Strategien, Backoff und Retry-Limits
+- Vermeidung doppelter Verarbeitung und unkontrollierter Retry-Schleifen
+Hands-on: Eine bewusst unvollständige Zustandsmaschine erweitern. Vorgegebene Fehlerereignisse auslösen und sicherstellen, dass das Gerät in einen definierten Zustand zurückkehrt.
+
+Ergebnis: Ein robusterer Verbindungs-Lifecycle mit nachvollziehbaren Übergängen.
+
+
+
+03:25
+60 Min.
+
+5. Diagnose, Energie und Produktionsaspekte
+- Signalqualität und Netzregistrierung auswerten
+- Modem-Logs und Host-Logs korrelieren
+- Auswirkungen von Nachrichtenfrequenz und Wiederverbindungen
+- Grundlagen von Power Saving und Messmethodik
+- Sichere Behandlung von Geräteidentitäten und Zugangsdaten
+Hands-on: Zwei vorgegebene Logs analysieren, einen Fehlerfall diagnostizieren und eine Strategie für energieeffizientes Reporting vorschlagen.
+
+Ergebnis: Die Entwickler können Messwerte und Logs zur Ursachenanalyse nutzen und Optimierungen begründen.
+
+
+
+04:25
+15 Min.
+
+Pause
+
+
+04:40
+60 Min.
+
+6. Integration Challenge: Production-Ready Telemetry
+
+Teams erhalten eine Referenzanwendung mit mindestens zwei bewusst eingebauten Schwachstellen.
+
+Aufgaben:
+- Status- und Fehlerbehandlung vervollständigen
+- Verbindungsabbrüche und fehlgeschlagene Cloud-Transaktionen behandeln
+- Nachrichtenformat und Sequenzierung verbessern
+- Ergebnis in nRF Cloud verifizieren
+Ergebnis: Eine demonstrierbare Referenzlösung mit definiertem Fehlerverhalten.
+
+
+
+05:40
+20 Min.
+
+7. Code-Review und Abschlussdemo
+- Demonstration der Cloud-Nachricht
+- Review der Zustandsmaschine
+- Architekturentscheidungen und Trade-offs
+- Transfer in reale Produktentwicklung
+
+
+
+Voraussetzungen für den Advanced-Workshop
+Erwartete Kenntnisse
+- Solide C-Kenntnisse und Embedded-Debugging
+- Grundverständnis von UART, seriellen Protokollen und asynchronen Ereignissen
+- Erfahrung mit RTOS-Konzepten ist empfehlenswert
+- Verständnis von JSON, IP-Netzwerken und grundlegenden Sicherheitskonzepten
+  
+  Pro Teilnehmer
+- nRF93M1 DK, Antenne und aktive SIM
+- nRF-Cloud-Zugang mit Berechtigung zum Provisionieren von Geräten
+- Laptop mit vorinstalliertem nRF Connect SDK, Toolchain und Debugger
+- Git-Repository mit Startprojekt, Testfällen und Musterlösungen
+  
+  Vorab getestete Software
+- Ein baubares nRF93M1-DK-Projekt
+- Ein Modem-Wrapper bzw. eine AT-Integration
+- Ein reproduzierbarer nRF-Cloud-Messaging-Ablauf
+- Ein Satz vorbereiteter Logs und Fehlerfälle
+
+Für diesen Track sollte der Build- und Flash-Prozess vor Beginn vollständig funktionieren. Die eigentliche Herausforderung ist nicht die Installation, sondern die Entwicklung und Analyse der Modem-Integration.
+
+
+==============================================
+
+
+Advanced-Workshop: 6 Stunden netto
+Gesamt: 09:00–16:00 Uhr · inklusive 2 × 15 Minuten Pause und 30 Minuten Mittagspause
+Uhrzeit	Dauer	Inhalt
+09:00–09:20	20 min	Architektur, Host/Modem-Aufteilung und Referenzprojekt
+09:20–10:10	50 min	AT-Integration, asynchrone Events und Modem-Wrapper
+10:10–11:10	60 min	nRF-Cloud-Messaging aus der Host-Firmware
+11:10–11:25	15 min	Pause
+11:25–12:25	60 min	Zustandsmaschine, Timeouts und Recovery
+12:25–12:55	30 min	Mittagspause
+12:55–13:55	60 min	Diagnose, Logging und Energieoptimierung
+13:55–14:10	15 min	Pause
+14:10–15:10	60 min	Integrations-Challenge: robuste Telemetrie
+15:10–16:00	50 min	Code-Review, Cloud-Demo und Engineering-Takeaways
+
+Netto: 360 Minuten Workshop, plus 60 Minuten Pausen = 7 Stunden.
+
+Beim Advanced-Track würde ich den zusätzlichen Zeitrahmen nutzen, um die Fehlerfälle realistisch zu simulieren: beispielsweise eine fehlgeschlagene Cloud-Transaktion, einen Modem-Neustart oder einen vorübergehenden Verlust der Mobilfunkverbindung.

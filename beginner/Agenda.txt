@@ -1,0 +1,165 @@
+Cellular IoT in 6 Hours: From Board to Cloud
+Zielgruppe: Embedded-Entwickler, Applikationsentwickler und technische Teams mit wenig Mobilfunk-Erfahrung.
+60 % Hands-on
+Keine LTE-Vorkenntnisse
+AT-Commands zuerst
+
+
+Agenda mit konkreten Übungen
+00:00
+30 Min.
+
+1. Cellular IoT und das nRF93M1 verstehen
+- LTE Cat 1 bis im Vergleich zu LTE-M und NB-IoT
+- Rolle von Host, Modem, SIM, Antenne und Cloud
+- Überblick über die Beispielanwendung
+Ergebnis: Die Teilnehmer können den Datenpfad vom DK bis zur Cloud erklären.
+
+
+
+00:30
+45 Min.
+
+2. Hardware und erste Modem-Kommandos
+- Antenne, SIM und USB anschließen
+- Serielle Schnittstelle in nRF Connect for Desktop öffnen
+- Modemantwort und Firmwareversion abfragen
+- Registrierung und Signalstatus prüfen
+Hands-on 1: „Talk to the modem“
+
+Die Teilnehmer führen eine vorbereitete Liste von AT-Commands aus und dokumentieren die Antworten.
+
+Ergebnis: Jedes DK antwortet auf AT-Commands und der Netzstatus ist nachvollziehbar.
+
+
+
+01:15
+45 Min.
+
+3. LTE-Verbindung und nRF Cloud provisionieren
+- SIM und Mobilfunkregistrierung kontrollieren
+- nRF-Cloud-Team und Geräteidentität kennenlernen
+- Registrierungstoken erzeugen und Gerät onboarden
+- Fehler bei Systemzeit, Registrierung oder Berechtigungen erkennen
+Hands-on 2: „Bring the device online“
+
+Die Teilnehmer registrieren ein DK in nRF Cloud und prüfen, ob das Gerät in der Geräteverwaltung erscheint.
+
+Ergebnis: Das DK ist einem Cloud-Team zugeordnet.
+
+
+
+02:00
+15 Min.
+
+Pause
+
+
+02:15
+60 Min.
+
+4. Die erste Nachricht an nRF Cloud
+- JSON-Payload und Messaging-Konzept
+- Cloud-AT-Command %NRFCLOUDMESSAGE
+- Rückmeldungen des Modems und Statuscodes
+- Nachricht im Cloud-Interface verifizieren
+Hands-on 3: „Send your first telemetry“
+
+Jeder Teilnehmer sendet beispielsweise eine Nachricht mit appId, einem Messwert und einer Sequenznummer.
+
+Ergebnis: Eine selbst ausgelöste Nachricht wird erfolgreich übertragen und überprüft.
+
+
+
+03:15
+60 Min.
+
+5. Eine kleine Host-Anwendung erstellen
+- Vorgegebenes nRF-Connect-SDK-Projekt öffnen
+- Grundstruktur der Host-Firmware kennenlernen
+- AT-Command-Aufruf in einen Applikationsablauf einbauen
+- Messwert und Sequenznummer variieren
+Hands-on 4: „From terminal to firmware“
+
+Die Teilnehmer ändern eine vorbereitete Applikation so, dass sie einen variablen Wert an nRF Cloud übermittelt.
+
+Ergebnis: Die Cloud-Nachricht wird durch die eigene Host-Firmware ausgelöst.
+
+
+
+04:15
+15 Min.
+
+Pause
+
+
+04:30
+60 Min.
+
+6. Debugging-Challenge
+- Netzregistrierung und Cloud-Verbindung unterscheiden
+- Typische AT-Fehler interpretieren
+- Fehlerhafte Payloads erkennen
+- Wiederholung nach einem Verbindungsfehler
+Hands-on 5: „Find the fault“
+
+Kleine Gruppen analysieren drei vorbereitete Fehlerfälle anhand von Logs und Checklisten.
+
+Ergebnis: Die Teilnehmer können typische Probleme strukturiert eingrenzen.
+
+
+
+05:30
+30 Min.
+
+7. Abschlussdemo und Review
+
+Jeder Teilnehmer demonstriert den Weg vom Messwert über LTE bis zur Cloud. Danach folgen Architektur-Recap und nächste Schritte.
+
+
+
+Voraussetzungen für den Einsteiger-Workshop
+Teilnehmer
+- Grundlegende Programmierkenntnisse, idealerweise C oder eine andere Programmiersprache
+- Erfahrung mit einem Terminal und dem Anschließen von Entwicklungsboards
+- Keine vorherige LTE-, Zephyr- oder nRF-Cloud-Erfahrung notwendig
+  
+  Pro Teilnehmer
+- Ein nRF93M1 DK mit LTE-Antenne und geeigneter SIM
+- Laptop mit USB-Anschluss und installierten Nordic-Tools
+- Zugriff auf ein nRF-Cloud-Team und Internet
+- Vorbereitete Zugangsdaten und individuelle Gerätezuordnung
+  
+  Software
+- nRF Connect for Desktop mit Serial Terminal
+- nRF Util für Geräteerkennung
+- Für Übung 4: vorinstallierte und getestete Version des nRF Connect SDK einschließlich Toolchain
+
+Die offizielle Nordic-Anleitung verwendet für den AT-Zugang unter anderem nrfutil device list, den seriellen Port vcom1 und eine Baudrate von 115200. Für das Onboarding werden die Geräteidentität und ein Registrierungstoken benötigt. 
+nRF Connect SDK 3.4.99 documentation
+
+
+Didaktischer Tipp: Den Build der Host-Firmware nicht zur ersten Hürde machen. Jeder sollte schon in der ersten Stunde eine Modemantwort sehen und spätestens nach drei Stunden eine Nachricht in nRF Cloud nachweisen können.
+
+
+=================================
+
+
+
+Einsteiger-Workshop: 6 Stunden netto
+Gesamt: 09:00–16:00 Uhr · inklusive 2 × 15 Minuten Pause und 30 Minuten Mittagspause
+Uhrzeit	Dauer	Inhalt
+09:00–09:30	30 min	Cellular IoT, LTE Cat 1 bis und nRF93M1-Architektur
+09:30–10:15	45 min	Hardware-Setup, AT-Commands und Modemstatus
+10:15–11:00	45 min	LTE-Registrierung und nRF-Cloud-Provisionierung
+11:00–11:15	15 min	Pause
+11:15–12:15	60 min	Erste Nachricht an nRF Cloud senden
+12:15–12:45	30 min	Mittagspause
+12:45–13:45	60 min	Host-Firmware anpassen und eigene Telemetrie senden
+13:45–14:00	15 min	Pause
+14:00–15:00	60 min	Debugging-Challenge: Netz, Modem und Cloud
+15:00–16:00	60 min	Abschlussprojekt: Telemetrie-End-to-End demonstrieren
+
+Netto: 360 Minuten Workshop, plus 60 Minuten Pausen = 7 Stunden.
+
+Den zusätzlichen Zeitraum würde ich vor allem für ein eigenständiges Abschlussprojekt verwenden: Die Teilnehmer verändern den Messwert, senden mehrere Nachrichten, prüfen die Ergebnisse in nRF Cloud und demonstrieren ihre Lösung.

@@ -1,0 +1,275 @@
+# Lab 3: Die erste Nachricht an nRF Cloud senden
+
+Einsteiger-Workshop · 60 Minuten · Praxislabor mit AT-Kommandos
+
+Lernziel: Die Teilnehmenden senden mit ihrem nRF93M1 DK eine eigene Nachricht an nRF Cloud, erkennen die asynchronen Modem-Rückmeldungen und überprüfen, ob die Nachricht erfolgreich übertragen wurde.
+
+In diesem Lab verwenden wir zunächst bewusst AT-Kommandos statt einer eigenen Cloud-Bibliothek auf dem Host-Mikrocontroller. Der nRF93M1 kann den Cloud-Client in seiner Modem-Firmware ausführen. Dadurch können wir den Ablauf verstehen, bevor wir in Lab 4 eine Host-Anwendung auf dem nRF54L15 betrachten.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://nrfconnectdocs.nordicsemi.com\&sz=32)
+
+nRF Connect SDK 3.4.99 documentation+1
+
+
+
+## 1. Ablauf für 60 Minuten
+
+### 0–10
+
+Min.
+
+Cloud-Verbindung vorbereiten
+
+LTE-Registrierung und Provisionierung aus Lab 2 überprüfen.
+
+### 10–20
+
+Min.
+
+Erste Nachricht senden
+
+Eine einfache JSON-Nachricht mit `AT%NRFCLOUDMESSAGE` veröffentlichen.
+
+### 20–35
+
+Min.
+
+Cloud-Ergebnis untersuchen
+
+`%COAP:`-Meldungen im Terminal beobachten und Gerätedaten in nRF Cloud suchen.
+
+### 35–50
+
+Min.
+
+Eigene Telemetrie bauen
+
+Die Nutzdaten ändern und mehrere Messwerte oder Zählerstände übertragen.
+
+### 50–60
+
+Min.
+
+Fehlersuche und Abschluss
+
+Erfolgsnachweis erbringen und typische Fehler von Transport- und Anwendungsfehlern unterscheiden.
+
+## 2. Übung A – Verbindung prüfen (Minuten 0–10)
+
+Vor dem ersten Sendeversuch prüfen die Teilnehmenden:
+
+```
+AT
+AT+CGMR
+AT+CEREG?
+AT%DEVICEUUID
+```
+
+Erwartungen:
+
+- `AT` liefert `OK`.
+- `AT+CGMR` gibt die Modem-Firmwareversion aus.
+- `AT+CEREG?` zeigt als zweiten Statuswert `1` oder `5`, wenn das Modem registriert ist.
+- `AT%DEVICEUUID` gibt die Geräte-UUID aus, die sie in Lab 2 für das Onboarding verwendet haben.
+
+Die UUID sollte zum Gerät in nRF Cloud passen. Bei fehlender Registrierung zunächst Lab 2 wiederholen, statt direkt die Cloud-Nachricht zu untersuchen.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://nrfconnectdocs.nordicsemi.com\&sz=32)
+
+nRF Connect SDK 3.4.99 documentation+1
+
+
+
+## 3. Übung B – Erste Cloud-Nachricht senden (Minuten 10–20)
+
+Der nRF93M1 unterstützt den Cloud-Befehl `AT%NRFCLOUDMESSAGE`. Er veröffentlicht JSON-Nutzdaten über CoAP; die Kommunikation wird durch DTLS 1.2 abgesichert. Für diese Übung muss auf dem nRF54L15 noch keine eigene Cloud-Bibliothek laufen.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://docs.nordicsemi.com\&sz=32)
+
+Nordic Semiconductor+1
+
+
+
+### Schritt 1: Einfache Nachricht vorbereiten
+
+Die Beispiel-Nutzdaten:
+
+```
+{"appId":"WORKSHOP","data":"hello"}
+```
+
+- `appId` kennzeichnet die Anwendung beziehungsweise Nachrichtenart.
+- `data` enthält den eigentlichen Beispielwert.
+
+Das ist eine einfache Übungsnachricht, noch kein standardisiertes Telemetrieschema.
+
+### Schritt 2: Nachricht über AT senden
+
+Die genaue Eingabeform für den JSON-Parameter kann von der AT-Syntax und Firmware-Version abhängen. Nutzt für den Workshop die in der zum installierten Modem passenden Nordic-Referenz dokumentierte Syntax für `AT%NRFCLOUDMESSAGE`. Die zugehörige Dokumentation beschreibt den JSON-Payload und den Cloud-Transport; die unterstützten Parameter sollten vorab mit der eingesetzten Firmware abgeglichen werden.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://nrfconnectdocs.nordicsemi.com\&sz=32)
+
+nRF Connect SDK 3.4.99 documentation+1
+
+
+
+Beispiel für die inhaltliche Nutzlast, die übertragen werden soll:
+
+```
+{"appId":"WORKSHOP","data":"hello"}
+```
+
+Wichtig für die Durchführung: Vor dem Workshop den konkreten AT-Befehl einmal auf dem Trainer-DK testen und den funktionierenden Befehl samt tatsächlicher Ausgabe in die Teilnehmerunterlagen übernehmen. So vermeiden wir, dass Escape-Zeichen im JSON oder Unterschiede zwischen Firmwareständen die Übung blockieren.
+
+### Schritt 3: Konkreter AT-Befehl
+
+Die offizielle AT-Referenz dokumentiert den JSON-Parameter direkt nach dem Gleichheitszeichen. Für die Beispielnachricht lautet der Befehl:
+
+```
+AT%NRFCLOUDMESSAGE={"appId":"WORKSHOP","data":"hello"}
+```
+
+Die erwartete Antwort kann so aussehen:
+
+```
+%COAP: RESPONSE,2.01
+%NRFCLOUDMESSAGE: SENT
+OK
+```
+
+Die Reihenfolge der Meldungen kann variieren, weil `%COAP:` eine asynchrone Statusmeldung ist. Der CoAP-Code `2.01` steht für eine erfolgreiche Antwort „Created“. `SENT` bestätigt, dass der Modem-Befehl die Nachricht zum Senden angenommen hat; die separate `%COAP:`-Antwort liefert den Transportstatus.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://docs.nordicsemi.com\&sz=32)
+
+Nordic Semiconductor+1
+
+
+
+Trainerhinweis: Diesen Befehl vor dem Workshop mit der verwendeten Firmware testen. Falls das Terminal die Anführungszeichen oder JSON-Zeichen verändert, die Eingabe über ein anderes serielles Terminal prüfen.
+
+## 4. Übung C – Nachricht in nRF Cloud nachweisen (Minuten 20–35)
+
+1. nRF Cloud öffnen: [nRF Cloud](https://nrfcloud.com/?utm_source=chatgpt.com).
+2. Zu Fleet → Devices navigieren.
+3. Das eigene nRF93M1-Gerät anhand seiner UUID auswählen.
+4. Die verfügbaren Geräteinformationen und Nachrichtenansichten untersuchen. Die konkrete Darstellung kann sich je nach Version der Cloud-Oberfläche unterscheiden.
+5. Prüfen, ob die gesendete Nachricht oder der entsprechende Geräte-Event sichtbar ist.
+
+Der Nachweis sollte aus zwei unabhängigen Beobachtungen bestehen:
+
+- Im Terminal: erfolgreiche `%COAP:`-Antwort, idealerweise `2.01`.
+- In der Cloud: Nachricht beziehungsweise zugehöriger Event beim richtigen Gerät sichtbar.
+
+Wenn die Nachricht im Terminal erfolgreich übertragen wurde, aber nicht dort angezeigt wird, wo erwartet, ist zunächst zu prüfen, welche Ansicht den betreffenden Nachrichtentyp darstellt. Nicht jeder frei gewählte `appId` wird automatisch als fertige Visualisierung oder Messwert-Dashboard dargestellt.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://docs.nordicsemi.com\&sz=32)
+
+Nordic Semiconductor+1
+
+
+
+## 5. Übung D – Eigene Telemetrie senden (Minuten 35–50)
+
+Jetzt ändern die Teilnehmenden den Payload und beobachten, wie sich die Daten in der Cloud wiederfinden lassen.
+
+### Aufgabe 1: Zählerstand übertragen
+
+```
+AT%NRFCLOUDMESSAGE={"appId":"WORKSHOP","data":"counter-1"}
+```
+
+Danach einen zweiten Wert senden:
+
+```
+AT%NRFCLOUDMESSAGE={"appId":"WORKSHOP","data":"counter-2"}
+```
+
+Die Teilnehmenden dokumentieren, ob beide Nachrichten mit erfolgreichem CoAP-Status quittiert werden.
+
+### Aufgabe 2: Eigenen Payload entwerfen
+
+### Payload-Generator
+
+Erzeugt eine Beispiel-JSON-Nutzlast für den AT-Befehl. Vor dem Senden prüfen, ob die Eingaben gültiges JSON ergeben.
+
+App-ID
+
+Messgröße
+
+Messwert
+
+Einheit
+
+JSON-Payload
+
+{"appId":"WORKSHOP","data":{"sensor":"temperature","value":"23.7","unit":"C"}}
+
+AT-Befehl
+
+AT%NRFCLOUDMESSAGE={"appId":"WORKSHOP","data":{"sensor":"temperature","value":"23.7","unit":"C"}}
+
+&#x20;AT-Befehl kopieren
+
+Hinweis: Messwerte werden hier als Strings übertragen. Die Cloud erhält JSON, aber eine automatische numerische Auswertung setzt gegebenenfalls ein passendes Datenschema voraus.
+
+Lernpunkt: Der Modem-Befehl transportiert JSON. Er macht aus beliebigen JSON-Feldern nicht automatisch eine typisierte Sensordatenreihe oder ein fertiges Dashboard. In einer echten Anwendung sollten Schema, Einheiten, Zeitstempel und die Verarbeitung auf der Cloud-Seite gemeinsam festgelegt werden.
+
+## 6. Fehlersuche (Minuten 50–60)
+
+| Symptom                                                   | Interpretation                                                           | Prüfschritte                                                      |
+| --------------------------------------------------------- | ------------------------------------------------------------------------ | ----------------------------------------------------------------- |
+| `ERROR` direkt nach dem AT-Befehl                         | Syntax oder Parameter möglicherweise ungültig                            | JSON-Format, Kommando-Syntax und Firmwareunterstützung prüfen     |
+| `SENT` erscheint, aber kein erfolgreicher `%COAP:`-Status | Der Sendeauftrag wurde angenommen; Cloud-Erfolg ist noch nicht bestätigt | Auf die asynchrone Antwort warten und Statuscode auswerten        |
+| `%COAP:` meldet einen Fehler                              | Transport- oder Cloud-Anfrage ist fehlgeschlagen                         | Antwortcode, Registrierung, Provisionierung und Systemzeit prüfen |
+| Erfolgreicher CoAP-Status, aber keine erwartete Anzeige   | Transport erfolgreich, Darstellung oder Zuordnung noch ungeklärt         | Richtiges Gerät, Nachrichtenansicht und `appId` prüfen            |
+| JWT- oder Authentifizierungsfehler                        | Möglicherweise ungültige Zeitbasis oder Authentifizierung                | Systemzeit und Provisionierungsstatus prüfen                      |
+
+Die Cloud-Kommandos des Modems verwenden CoAP über DTLS 1.2. Die `%COAP:`-URCs sind deshalb ein zentraler Diagnosepunkt und sollten nicht mit der unmittelbaren Antwort auf das AT-Kommando verwechselt werden.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://docs.nordicsemi.com\&sz=32)
+
+Nordic Semiconductor+1
+
+
+
+### Mini-Challenge
+
+Szenario: Das Terminal zeigt `%NRFCLOUDMESSAGE: SENT` und `OK`, aber du findest keine Nachricht in der erwarteten Cloud-Ansicht. Was ist die beste nächste Aktion?
+
+Die Nachricht gilt sicher als vollständig zugestellt.
+
+Den asynchronen `%COAP:`-Status prüfen und anschließend Gerät sowie Nachrichtenansicht in nRF Cloud kontrollieren.
+
+Sofort das Host-MCU-Firmwareprojekt neu flashen.
+
+
+
+## 7. Abnahmekriterien für Lab 3
+
+Eine JSON-Nachricht mit AT%NRFCLOUDMESSAGE gesendet
+
+Die unmittelbare AT-Antwort von der asynchronen %COAP-Meldung unterschieden
+
+Den CoAP-Status dokumentiert
+
+Den richtigen Eintrag beziehungsweise Event in nRF Cloud gesucht
+
+Eine eigene Nutzlast verändert und erneut gesendet
+
+0 von 5 Lernzielen erreicht
+
+## 8. Trainer-Check vor dem Workshop
+
+- Die exakte Syntax von `AT%NRFCLOUDMESSAGE` auf der vorgesehenen Firmware getestet.
+- Eine erfolgreiche `%COAP:`-Antwort mitgeschnitten.
+- Die empfangene Nachricht im passenden nRF-Cloud-Gerätebereich verifiziert.
+- Ein Ersatzgerät mit funktionierender SIM und Provisionierung bereitgestellt.
+- Ein Beispiel für einen erfolgreichen und einen fehlgeschlagenen Cloud-Status vorbereitet.
+
+Offizielle Referenzen:
+
+- [Nordic: Connecting the nRF93M1 DK to nRF Cloud](https://nrfconnectdocs.nordicsemi.com/ncs/latest/nrf/app_dev/device_guides/nrf93m1/nrf93m1_cloud_connecting.html?utm_source=chatgpt.com)
+- [Nordic: nRF93M1 Cellular AT Commands](https://docs.nordicsemi.com/r/bundle/ref_at_commands_nrf93m1/page/ref/at_commands_93/intro.html?contentId=kieJZ3WiLy7cTNnILKr_Hg\&utm_source=chatgpt.com)
+- [Nordic: AT%NRFCLOUDMESSAGE – Set command](https://docs.nordicsemi.com/r/bundle/ref_at_commands_nrf93m1/page/ref/at_commands_93/cloud/nrfcloudmessage_set.html?utm_source=chatgpt.com)
+
+Übergang zu Lab 4: Bisher hat der PC die AT-Kommandos direkt an das Modem geschickt. Als Nächstes verlagern wir diese Steuerung auf den nRF54L15-Host: Die Teilnehmenden lernen, wie eine Firmware den Modemkanal ansteuert, Antworten auswertet und Sensordaten automatisiert an nRF Cloud überträgt.

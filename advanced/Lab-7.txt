@@ -1,0 +1,238 @@
+# Abschlussprojekt – Cellular IoT: Fehler analysieren und Datenübertragung wiederherstellen
+
+# Lab 7 · Praxis-Challenge
+
+15:00–16:00 Uhr · 60 Minuten · Fortgeschrittenen-Workshop
+
+Die Teilnehmenden übernehmen ein fehleranfälliges LTE-IoT-Gerät auf Basis des nRF93M1 DK und sollen die Ursache einer unterbrochenen Datenübertragung finden, eine robuste Recovery-Strategie implementieren und die erfolgreiche Wiederherstellung nachweisen.
+
+[nRF93M1 Development Kit - nordicsemi.com](https://images.openai.com/static-rsc-4/pbqgN5sZF4HEJwIu59LSudtnJ_hQDNTakBnG7XnYs8ZV_9a3SOvIUF2VYMz7xhQXHzQcb97R0-xi3byjk53A5USJEoRSJRt3Es98cWLBNVYSN9n6Z0pwnbnwLGlZc2L7bocFlH1rw19Jr7nk0e9FTiq7ryr9zwJY0njm5R-88Po?purpose=inline)
+
+## 1. Ausgangssituation
+
+Ein batteriebetriebener Sensor sendet regelmäßig Messwerte an einen Cloud-Endpunkt. Nach längerer Laufzeit werden jedoch Daten nicht mehr zuverlässig übertragen.
+
+Die Anwendung meldet weiterhin, dass das Modem gestartet ist. Manchmal ist LTE verfügbar, manchmal nicht. Nach einem Verbindungsverlust werden Messwerte entweder verspätet übertragen oder fehlen ganz. Ein einfacher Neustart hilft gelegentlich, verbraucht aber unnötig Energie.
+
+Euer Auftrag: Findet den Fehler, behebt die Ursache und zeigt, dass sich das Gerät auch bei wiederholten Störungen selbstständig erholt.
+
+## 2. Fehlerbild und Testumgebung
+
+Beobachtete Symptome
+
+- LTE-Registrierung geht zeitweise verloren.
+- AT-Kommandos laufen in einen Timeout oder liefern unerwartete Antworten.
+- Eine erfolgreiche Modemantwort wird fälschlich als erfolgreiche Cloud-Zustellung gewertet.
+- Nach einem Neustart werden Nachrichten doppelt oder gar nicht gesendet.
+- Das Modem bleibt nach einem Fehler länger aktiv als vorgesehen.
+
+Vorhandene Hilfsmittel
+
+- nRF93M1 DK und Zephyr-Anwendung auf dem Host
+- UART-/AT-Konsole und Modem-Logs
+- Optional: PPP über CMUX
+- Simulierbare Netzunterbrechung, verzögerte Antworten und Cloud-Fehler
+- Optional: Power Profiler Kit II für Strommessungen
+
+Die Störungen können durch die Testleitung, eine kontrollierte Fehlersimulation oder vorhandene Logs ausgelöst werden. Es ist nicht erforderlich, ein reales Mobilfunknetz absichtlich zu stören.
+
+## 3. Arbeitsauftrag
+
+Die Gruppe soll eine robuste Datenübertragung mit klaren Zuständen, kontrollierter Fehlerbehandlung und nachvollziehbarer Diagnose aufbauen.
+
+Aufgabe A – Fehler eingrenzen
+
+- Modemstatus, LTE-Registrierung und Datenpfad getrennt prüfen.
+- AT-Timeouts und asynchrone URCs unterscheiden.
+- Feststellen, ob das Problem bei Modem, Netzwerk, Transport oder Cloud-Anwendung liegt.
+
+Aufgabe B – Recovery implementieren
+
+- Zustandsmaschine für Registrierung, Datenverbindung und Recovery ergänzen.
+- Wiederholungen mit begrenztem exponentiellem Backoff implementieren.
+- Erst gezielte Wiederherstellung versuchen, dann erst einen Modem-Reset.
+
+Aufgabe C – Daten zuverlässig übertragen
+
+- Jede Messung erhält eine stabile Nachrichten-ID und Sequenznummer.
+- Nicht bestätigte Nachrichten bleiben in einer Outbox.
+- Transportbestätigung und fachliche Bestätigung unterscheiden.
+- Doppelte Übertragungen auf Empfängerseite erkennen.
+
+Aufgabe D – Feldbetrieb absichern
+
+- Unnötige Dauerabfragen und Neustarts vermeiden.
+- Fehler, Wiederholungszähler und Registrierungsdauer protokollieren.
+- Falls Zeit bleibt, Schlaf- und Stromverbrauch nach der Recovery messen.
+
+## 4. Referenzarchitektur der Lösung
+
+```
+Sensor / Anwendung
+       │
+       ▼
+Nachrichten-Outbox
+(ID, Sequenznummer, Nutzdaten)
+       │
+       ▼
+Zustandsmaschine
+       │
+       ├── Modemstatus / AT-URCs
+       ├── LTE-Registrierung
+       ├── Datenverbindung
+       └── Recovery + Backoff
+       │
+       ▼
+LTE-Datenpfad
+       │
+       ▼
+Cloud-Endpunkt
+       │
+       ▼
+Anwendungsbestätigung
+```
+
+Die konkrete Implementierung hängt vom gewählten Integrationsmodell ab:
+
+- AT-Modell: Das Modem übernimmt die IP- und Cloud-Kommunikation; die Host-Anwendung verwaltet Nachrichten und wertet Modemmeldungen aus.
+- PPP-Modell: Die Host-Anwendung nutzt den IP-Stack und Sockets von Zephyr. PPP-Verbindungsstatus und Modemstatus müssen getrennt überwacht werden.
+
+## 5. Implementierungsgerüst
+
+Die folgende C-nahe Vorlage zeigt die erwartete Recovery-Logik. Die Funktionen für AT-Kommandos, Ereignisse und Datenübertragung müssen an die verwendete Zephyr-/nRF-Connect-SDK-Version angepasst werden.
+
+```
+enum cell_state {
+    CELL_INIT,
+    CELL_REGISTERING,
+    CELL_ONLINE,
+    CELL_RECOVERY
+};
+
+static enum cell_state state = CELL_INIT;
+static unsigned int retry_count;
+
+static unsigned int recovery_delay_s(void)
+{
+    unsigned int delay = 2U;
+
+    for (unsigned int i = 0; i < retry_count && i < 5; i++) {
+        delay *= 2U;
+    }
+
+    return delay > 60U ? 60U : delay;
+}
+
+static void on_registration_lost(void)
+{
+    state = CELL_RECOVERY;
+    retry_count++;
+
+    /* Geplante Aufgabe:
+     * 1. Status und Fehlerursache protokollieren
+     * 2. Ausstehende Nachrichten behalten
+     * 3. Recovery mit begrenztem Backoff planen
+     * 4. Erst bei Bedarf Modem oder Datenverbindung neu starten
+     */
+}
+
+static void on_data_confirmed(void)
+{
+    /* Erst nach der für die Anwendung definierten
+     * Bestätigung die Nachricht aus der Outbox entfernen.
+     */
+    retry_count = 0;
+    state = CELL_ONLINE;
+}
+```
+
+Wichtige Details:
+
+- Die Verzögerung darf nicht durch blockierendes Warten im AT-Empfangspfad umgesetzt werden. Nutzt dafür einen Timer, eine verzögerte Work-Queue oder einen geeigneten Scheduler.
+- Ein erfolgreicher AT-Befehl bedeutet nicht automatisch, dass LTE registriert ist oder die Cloud die Nachricht verarbeitet hat.
+- Der Wiederholungszähler wird erst zurückgesetzt, wenn die Verbindung und der Datenpfad wieder nachweislich funktionieren.
+- Nachrichten müssen bei einem Neustart erhalten bleiben, wenn sie zuverlässig zugestellt werden sollen. Für echte Stromausfälle braucht ihr gegebenenfalls eine persistente Outbox.
+
+## 6. Fehlerszenarien zum Testen
+
+Die Kursleitung gibt die Fehler einzeln frei. Die Gruppe dokumentiert jeweils Diagnose, Reaktion und Ergebnis.
+
+### Testprotokoll
+
+0 von 5 geprüft
+
+Szenario 1 – Netzverlust
+
+Die LTE-Registrierung geht verloren; später ist das Netz wieder verfügbar.
+
+Erwartetes Verhalten: Registrierungsverlust erkennen, Backoff starten, selbstständig wieder registrieren und ausstehende Daten senden.
+
+Szenario 2 – AT-Timeout
+
+Ein AT-Kommando erhält innerhalb des Timeouts keine abschließende Antwort.
+
+Erwartetes Verhalten: Timeout protokollieren, den Kommandozustand bereinigen und keine parallelen oder unkontrollierten AT-Kommandos starten.
+
+Szenario 3 – Cloud-Fehler
+
+Das Modem akzeptiert den Sendeauftrag, aber die erwartete Anwendungsbestätigung bleibt aus.
+
+Erwartetes Verhalten: Nachrichten-ID behalten, kontrolliert erneut senden und doppelte Verarbeitung verhindern.
+
+Szenario 4 – Wiederholter Fehler
+
+Die Datenverbindung bricht mehrfach hintereinander ab.
+
+Erwartetes Verhalten: Begrenzter Backoff, Diagnosezähler und gestufte Recovery; kein permanenter Neustart-Loop.
+
+Szenario 5 – Energieproblem (optional)
+
+Das Modem bleibt nach erfolgreicher Übertragung aktiv.
+
+Erwartetes Verhalten: Ursache anhand von Zustandsmeldungen, Polling, Wake-Signalen und Strommessung eingrenzen.
+
+## 7. Zeitplan für die 60 Minuten
+
+| Zeit        | Aktivität                                      | Ergebnis                                                            |
+| ----------- | ---------------------------------------------- | ------------------------------------------------------------------- |
+| 15:00–15:08 | Fehlerbild reproduzieren und Logs auswerten    | Erste Hypothese                                                     |
+| 15:08–15:20 | Fehlerursache lokalisieren                     | Fehler in Modem, Registrierung, Datenpfad oder Anwendung eingrenzen |
+| 15:20–15:38 | Zustandsmaschine und Recovery ergänzen         | Kontrollierte Wiederherstellung                                     |
+| 15:38–15:50 | Fehler erneut injizieren und Tests durchführen | Reproduzierbare Testergebnisse                                      |
+| 15:50–16:00 | Demo und Review                                | Lösung präsentieren und Grenzen benennen                            |
+
+## 8. Abnahmekriterien
+
+Die Gruppe besteht das Abschlussprojekt, wenn sie folgende Punkte demonstriert:
+
+### Bewertung
+
+## 0/7
+
+Ein LTE-Registrierungsverlust wird erkannt und nicht mit einem einfachen AT-Fehler verwechselt.
+
+Die Anwendung erholt sich nach Wiederkehr des Netzes ohne manuelles Eingreifen.
+
+AT-Kommandos werden serialisiert und Timeouts sauber behandelt.
+
+Nicht bestätigte Nachrichten bleiben erhalten und werden erneut übertragen.
+
+Transportbestätigung und fachliche Bestätigung werden unterschieden.
+
+Die Recovery nutzt begrenzten Backoff und vermeidet einen permanenten Neustart-Loop.
+
+Die Gruppe kann anhand von Logs erklären, warum die Wiederherstellung erfolgreich war.
+
+Die Checkliste dient der Bewertung während der Live-Demo.
+
+## 9. Abschlusspräsentation der Gruppe
+
+Jede Gruppe präsentiert kurz:
+
+1. Fehlerursache: Was ist tatsächlich ausgefallen, und welche Beobachtung belegt das?
+2. Recovery: Welche Zustandsübergänge und Wiederholungsregeln wurden implementiert?
+3. Zuverlässigkeit: Wie werden Nachrichtenverluste und Duplikate behandelt?
+4. Grenzen: Welche Fehler kann die Lösung noch nicht automatisch beheben?
+5. Feldbetrieb: Welche Metriken würdet ihr im Produkt dauerhaft erfassen?
+
+Erwartetes Endergebnis: Nicht nur „es funktioniert wieder“, sondern eine nachvollziehbare, getestete Fehlerbehandlung, die auch beim nächsten Netzausfall kontrolliert reagiert.

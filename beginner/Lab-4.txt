@@ -1,0 +1,271 @@
+# Lab 4: Den nRF54L15-Host programmieren und Telemetrie automatisieren
+
+Einsteiger-Workshop · 60 Minuten · C, Modemsteuerung und erste Host-Anwendung
+
+In Lab 3 haben die Teilnehmenden AT-Kommandos manuell im Terminal eingegeben. Jetzt verlagern wir die Steuerung in eine Anwendung auf dem nRF54L15 des nRF93M1 DK.
+
+Das Lernziel ist nicht, in einer Stunde einen vollständigen Mobilfunk-Stack zu entwickeln. Stattdessen sollen die Teilnehmenden verstehen, wie die Host-Firmware mit dem Modem kommuniziert, eine AT-Antwort verarbeitet und den Ablauf für eine spätere Telemetrie-Anwendung automatisiert.
+
+Die Architektur bleibt dabei klar getrennt:
+
+- nRF54L15: führt den Anwendungscode aus.
+- nRF93M1: stellt Modemfunktionen, Mobilfunkprotokolle und den Cloud-Client bereit.
+- nRF Cloud: empfängt und verarbeitet die übertragenen Daten.
+
+## 1. Ablauf für 60 Minuten
+
+### 0–10
+
+Min.
+
+Projekt und Toolchain öffnen
+
+Prüfen, ob nRF Connect SDK, Toolchain und nRF Util funktionieren.
+
+### 10–20
+
+Min.
+
+Host-Anwendung bauen
+
+Das offizielle nRF93M1-AT-Host-Beispiel kompilieren.
+
+### 20–30
+
+Min.
+
+Firmware flashen und Logs lesen
+
+Die Anwendung auf dem nRF54L15 starten und die Modeminitialisierung beobachten.
+
+### 30–45
+
+Min.
+
+Cloud-Synchronisierung prüfen
+
+Gerätestatus und übertragene Standort- beziehungsweise Batteriedaten untersuchen.
+
+### 45–55
+
+Min.
+
+Code nachvollziehen und ändern
+
+Startsequenz, AT-Steuerung und Cloud-Synchronisierung im Quellcode finden.
+
+### 55–60
+
+Min.
+
+Abnahme
+
+Jede Person zeigt einen erfolgreichen Host-Start und einen Cloud-Nachweis.
+
+## 2. Übung A – Projekt und Hardware vorbereiten (Minuten 0–10)
+
+Für dieses Einsteiger-Lab empfehle ich das offizielle Beispiel nRF93M1 AT Host Application von Nordic. Es läuft auf dem nRF54L15-Host, steuert das Modem über AT-Kommandos und sendet Standort- und Batteriedaten an nRF Cloud. Damit können die Teilnehmenden eine echte Host-Anwendung untersuchen, ohne zuerst einen eigenen Modemtreiber schreiben zu müssen.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://docs.nordicsemi.com\&sz=32)
+
+Nordic Semiconductor+1
+
+
+
+### Voraussetzungen
+
+- nRF93M1 DK mit LTE-Antenne und aktiver SIM-Karte
+- funktionierende Mobilfunkabdeckung
+- nRF Connect SDK mit passender Toolchain
+- `west` und `nrfutil` installiert
+- nRF Cloud Account und das Gerät aus Lab 2
+- für den Batteriebericht: eine angeschlossene Batterie; ohne Batterie kann die Anwendung weiterlaufen, lässt aber den Batteriebericht aus.&#x20;
+
+  [image](https://www.google.com/s2/favicons?domain=https://docs.nordicsemi.com\&sz=32)
+
+  Nordic Semiconductor
+
+
+
+Trainerhinweis: Toolchain-Installation und Repository-Download sollten vor dem Workshop erledigt sein. Sonst kann allein der Software-Setup einen großen Teil der 60 Minuten verbrauchen.
+
+## 3. Übung B – Host-Firmware bauen (Minuten 10–20)
+
+Die Anwendung wird auf dem Host-Mikrocontroller gebaut, nicht auf dem LTE-Modul. Die offizielle Nordic-Anleitung verwendet für dieses Beispiel das Target `nrf93m1dk/nrf54l15/cpuapp/ns`.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://docs.nordicsemi.com\&sz=32)
+
+Nordic Semiconductor+1
+
+
+
+Im nRF Connect SDK Toolchain-Terminal in das bereits vorbereitete Repository wechseln:
+
+```
+cd smha-workspace/project/applications/93m1_at
+west build -b nrf93m1dk/nrf54l15/cpuapp/ns -p
+```
+
+`smha-workspace/project` ist dabei das in der Nordic-Anleitung verwendete Workspace-Verzeichnis. Wenn euer Kurs-Repository an einem anderen Ort liegt, muss der Pfad entsprechend angepasst werden.
+
+### Was passiert beim Build?
+
+- `west build` startet den Build-Prozess.
+- `-b nrf93m1dk/nrf54l15/cpuapp/ns` wählt das Board und den Host-Anwendungskern mit TrustZone-Konfiguration.
+- `-p` führt einen Pristine-Build aus, also einen sauberen Neuaufbau.
+
+Erfolgskriterium: Der Build endet ohne Fehler und erzeugt das Firmware-Image. Falls die Kompilierung scheitert, zunächst SDK-Version, Toolchain und Workspace-Konfiguration überprüfen.
+
+## 4. Übung C – Firmware flashen und starten (Minuten 20–30)
+
+Das Board per USB anschließen. Anschließend im Toolchain-Terminal:
+
+```
+west flash
+```
+
+Danach einen seriellen Monitor auf VCOM0 mit 115200 Baud öffnen und das Board zurücksetzen. Die offizielle Anleitung nennt als wichtigen Startindikator:
+
+```
+<inf> main: Network connected, first sync in 5 s
+```
+
+Das zeigt, dass die Anwendung die Netzwerkverbindung hergestellt hat und die erste Synchronisierung vorbereitet. Die vollständigen Ausgaben können abhängig von Firmwarestand und Laufzeit variieren.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://docs.nordicsemi.com\&sz=32)
+
+Nordic Semiconductor
+
+
+
+Wichtig für die Fehlersuche: `west flash` aktualisiert die Host-Firmware auf dem nRF54L15. Die Modem-Firmware des nRF93M1 wird dadurch nicht automatisch aktualisiert. Beide Komponenten haben getrennte Firmwarestände.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://nrfconnectdocs.nordicsemi.com\&sz=32)
+
+nRF Connect SDK 3.4.99 documentation
+
+
+
+## 5. Übung D – nRF Cloud verbinden und Daten verifizieren (Minuten 30–45)
+
+Die Modem-Firmware besitzt ihren eigenen nRF-Cloud-Client. Der Host steuert diesen über AT-Kommandos. Deshalb müssen keine zusätzlichen Cloud-Zertifikate in der Host-Anwendung installiert werden.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://docs.nordicsemi.com\&sz=32)
+
+Nordic Semiconductor+1
+
+
+
+### Schritt 1: Gerätestatus prüfen
+
+In nRF Cloud:
+
+1. Fleet → Devices öffnen.
+2. Das bereits in Lab 2 provisionierte Gerät auswählen.
+3. Prüfen, ob das Gerät im richtigen Account beziehungsweise Team geführt wird.
+4. Die Geräteinformationen und verfügbaren Datenansichten öffnen.
+
+Wenn das Gerät bereits korrekt provisioniert ist, nicht unnötig ein zweites Geräteobjekt anlegen.
+
+### Schritt 2: Konsolenausgabe kontrollieren
+
+Die Teilnehmenden suchen in den Host-Logs nach Hinweisen auf:
+
+- erfolgreich hergestellte Netzwerkverbindung,
+- beginnende Cloud-Synchronisierung,
+- erfolgreiche Standort- oder Batterieabfrage,
+- Fehlern oder Zeitüberschreitungen.
+
+### Schritt 3: Daten in der Cloud nachweisen
+
+Die Teilnehmenden dokumentieren, welche Daten tatsächlich ankommen. Die offizielle Anwendung ist auf Standort- und Batteriedaten ausgerichtet. Für einen Batteriebericht muss eine Batterie angeschlossen sein; die Standortfunktion kann von verfügbaren Positionsinformationen und der Konfiguration abhängen.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://docs.nordicsemi.com\&sz=32)
+
+Nordic Semiconductor+1
+
+
+
+Abnahmekriterium: Der Host läuft, die Netzwerkverbindung wird bestätigt und mindestens ein erwarteter Datensatz oder ein entsprechender Cloud-Event ist nachweisbar.
+
+## 6. Übung E – Den C-Code verstehen und verändern (Minuten 45–55)
+
+Hier geht es um den Übergang vom bloßen Ausführen einer Beispiel-Firmware zum Verständnis einer Embedded-Anwendung.
+
+Die Teilnehmenden öffnen das Verzeichnis `applications/93m1_at` und suchen die Einstiegspunkte sowie die Aufrufe, mit denen der Host das Modem steuert.
+
+### Arbeitsauftrag für die Teilnehmenden
+
+In Zweiergruppen bearbeiten. Jeder Teilnehmende soll mindestens eine Frage anhand des Quellcodes beantworten.
+
+Die main()-Funktion oder den zentralen Einstiegspunkt finden.
+
+Die Stelle finden, an der die Modem- beziehungsweise Netzwerkinitialisierung startet.
+
+Erkennen, wie AT-Kommandos und Modem-Antworten verarbeitet werden.
+
+Die Stelle finden, an der Standort- oder Batteriedaten zur Cloud-Synchronisierung vorbereitet werden.
+
+Eine harmlose Log-Ausgabe ändern, neu bauen und auf dem DK überprüfen.
+
+0 von 5 Aufgaben erledigt
+
+### Technischer Hintergrund für den Trainer
+
+Bei einer eigenen AT-basierten Host-Anwendung sind drei Aspekte besonders wichtig:
+
+- UART-Kommunikation: Der Host sendet Befehle und empfängt Antworten über die Modem-Schnittstelle.
+- Asynchrone Ereignisse: Das Modem kann sogenannte Unsolicited Result Codes (URCs) auch während eines laufenden Kommandos senden.
+- Timeouts und Zustände: Netzwerkregistrierung und Cloud-Vorgänge können länger dauern als ein gewöhnlicher AT-Befehl. Ein robuster Host muss diese Zustände und Zeitüberschreitungen berücksichtigen.
+
+Nordic empfiehlt für Zephyr das `modem_chat`-Modul, das Antwortzuordnung, Timeouts und URCs verwaltet. Für ein eigenes Produkt ist ein solcher Mechanismus robuster als eine selbst geschriebene Parser-Schleife, die nur auf `OK` wartet.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://nrfconnectdocs.nordicsemi.com\&sz=32)
+
+nRF Connect SDK 3.4.99 documentation
+
+
+
+## 7. Troubleshooting
+
+| Symptom                                       | Mögliche Ursache                                                   | Vorgehen                                             |
+| --------------------------------------------- | ------------------------------------------------------------------ | ---------------------------------------------------- |
+| Build schlägt fehl                            | SDK- oder Toolchain-Version passt nicht zum Projekt                | Repository- und Toolchain-Anforderungen prüfen       |
+| Flashen funktioniert, aber keine Modemantwort | Modem nicht eingeschaltet oder im Reset                            | Stromversorgung und Modemsteuerung prüfen            |
+| Kein Netzwerkstatus im Log                    | SIM, Antenne, Abdeckung oder Initialisierung                       | Registrierung und Modemlogs kontrollieren            |
+| Netzwerk verbunden, aber Cloud-Daten fehlen   | Provisionierung, Cloud-Synchronisierung oder Datenverfügbarkeit    | Account, Gerät und konkrete Fehlerlogs prüfen        |
+| Unvollständige oder fehlerhafte AT-Antworten  | URCs stören einen simplen Parser; UART-Konfiguration nicht passend | Modem-Chat-Mechanismus und UART-Konfiguration prüfen |
+
+Bei der seriellen Verbindung sollte Hardware-Flow-Control berücksichtigt werden, sofern die gewählte Konfiguration sie unterstützt und benötigt. Nordic weist darauf hin, dass fehlendes RTS/CTS bei höheren Baudraten zu verlorenen Bytes führen kann.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://nrfconnectdocs.nordicsemi.com\&sz=32)
+
+nRF Connect SDK 3.4.99 documentation+1
+
+
+
+## 8. Abnahmekriterien
+
+Host-Anwendung erfolgreich gebaut
+
+Firmware auf den nRF54L15 geflasht
+
+Serielle Startmeldungen korrekt interpretiert
+
+Netzwerkverbindung in den Logs erkannt
+
+Cloud-Daten oder ein passender Cloud-Event nachgewiesen
+
+Mindestens eine Code-Stelle gefunden und eine Log-Ausgabe verändert
+
+0 von 6 erfüllt
+
+In Arbeit
+
+## Offizielle Referenzen
+
+- [Nordic: Get started with the nRF93M1 AT Host Application](https://docs.nordicsemi.com/r/bundle/serial-modem-host-applications/page/getting-started/93m1-at.html?contentId=sEGYdNWWYmPXk4kd~FiV7w\&utm_source=chatgpt.com)
+- [Nordic: AT command interface](https://nrfconnectdocs.nordicsemi.com/ncs/latest/nrf/app_dev/device_guides/nrf93m1/nrf93m1_at_commands.html?utm_source=chatgpt.com)
+- [Nordic: Building for the nRF93M1 DK](https://nrfconnectdocs.nordicsemi.com/ncs/latest/nrf/app_dev/device_guides/nrf93m1/nrf93m1_building.html?utm_source=chatgpt.com)
+
+Übergang zum letzten Workshop-Teil: In der verbleibenden Zeit können die Teilnehmenden das Gelernte in einem kleinen Abschlussprojekt kombinieren: eine einfache Geräteinformation automatisiert erfassen, über den Host übertragen und in nRF Cloud nachweisen. Das eignet sich als Grundlage für den geplanten einstündigen Abschlussblock von 15:00 bis 16:00 Uhr.

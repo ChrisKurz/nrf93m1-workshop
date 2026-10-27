@@ -1,0 +1,256 @@
+# Advanced Workshop – Lab 3: Netzwerk-Zustandsmaschine und Recovery
+
+10:15–11:00 Uhr · 45 Minuten · Nordic nRF93M1 DK / nRF54L15
+
+Ziel: Aus einzelnen AT-Kommandos wird eine robuste Verbindungslogik. Die Host-Anwendung soll erkennen, ob das Modem registriert ist, einen Verbindungsverlust zuverlässig erkennen und nach Fehlern kontrolliert wieder online kommen – ohne endlose Reconnect-Schleifen oder unnötige Modem-Resets.
+
+Der nRF93M1 startet standardmäßig mit `AT+CFUN=0`, also ohne aktive LTE-Funktion. Die Anwendung muss die Registrierungsbenachrichtigungen konfigurieren und die Funkfunktion gezielt aktivieren. Bei `AT+CEREG?` bedeutet der Registrierungsstatus `1` „im Heimatnetz registriert“ und `5` „im Roaming registriert“.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://nrfconnectdocs.nordicsemi.com\&sz=32)
+
+nRF Connect SDK 3.4.99 documentation+1
+
+
+
+## 1. Lernziele
+
+Nach dem Lab können die Teilnehmenden:
+
+- eine Zustandsmaschine für Modem und Mobilfunkregistrierung implementieren;
+- URCs wie `+CEREG` als Ereignisse verarbeiten;
+- Registrierung, IP-Konnektivität und erfolgreiche Datenübertragung unterscheiden;
+- Backoff und begrenzte Recovery-Maßnahmen implementieren;
+- anhand von Signalqualität, SIM/APN und Modemstatus Fehler systematisch eingrenzen.
+
+## 2. Die Zustandsmaschine
+
+S0 · MODEM_INIT
+
+UART bereit, AT erreichbar, Version erfasst
+
+S1 · RADIO_ENABLE
+
+URCs aktivieren, danach `AT+CFUN=1`
+
+S2 · REGISTERING
+
+Auf `+CEREG` warten; Timeout und Diagnose überwachen
+
+S3 · REGISTERED
+
+Registrierung bestätigt – Datenpfad separat prüfen
+
+S4 · DATA_READY
+
+Anwendungsdaten übertragen und Ergebnis verifizieren
+
+RECOVERY
+
+Status prüfen → Backoff → gezielte Wiederherstellung → erneut registrieren
+
+Wichtig: `REGISTERED` bedeutet nicht automatisch, dass eine IP-Verbindung oder der Cloud-Datentransfer funktioniert. Bei PPP muss zusätzlich das Netzwerkinterface verfügbar sein; beim AT-Modell muss der jeweilige Socket- oder Cloud-Dienst erfolgreich sein.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://nrfconnectdocs.nordicsemi.com\&sz=32)
+
+nRF Connect SDK 3.4.99 documentation+1
+
+
+
+## 3. Lab 3A – Registrierung zuverlässig starten
+
+### Schritt 1: Modem und Firmware prüfen
+
+Im AT-Terminal:
+
+```
+AT
+AT+CMEE=2
+AT+CGMR
+AT+CEREG?
+AT+CESQ
+```
+
+Notiere die Firmwareversion, den Registrierungsstatus und die Signalwerte. `AT+CESQ` liefert mehrere Signalqualitätsfelder; insbesondere RSRQ und RSRP sind bei der LTE-Diagnose hilfreich.
+
+### Schritt 2: Ereignisse vor der Registrierung aktivieren
+
+```
+AT+CEREG=2
+AT+CGEREP=1
+AT+CFUN=1
+AT+CEREG?
+```
+
+Die genaue `+CEREG`-Ausgabe ist abhängig vom eingestellten Benachrichtigungslevel. Die Registrierung kann beim ersten Netzsuchlauf mehrere Minuten dauern. Ein kurzer Timeout darf deshalb nicht automatisch einen Modemreset auslösen. Prüfe die Unterstützung von `AT+CGEREP` und die zulässigen Parameter mit der Dokumentation der installierten Modem-Firmware.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://nrfconnectdocs.nordicsemi.com\&sz=32)
+
+nRF Connect SDK 3.4.99 documentation+1
+
+
+
+### Schritt 3: Statusübergänge implementieren
+
+| Ereignis                                  | Zustandsaktion                                                         |
+| ----------------------------------------- | ---------------------------------------------------------------------- |
+| AT antwortet mit `OK`                     | `MODEM_INIT` abschließen                                               |
+| Funkfunktion aktiviert                    | Nach `REGISTERING` wechseln                                            |
+| `+CEREG` meldet Status `1` oder `5`       | `REGISTERED` setzen                                                    |
+| `+CEREG` meldet Verlust der Registrierung | Datenübertragung pausieren, Recovery starten                           |
+| Registrierung bleibt aus                  | Diagnose erfassen und begrenztes Backoff anwenden                      |
+| Datenübertragung schlägt fehl             | Datenpfad prüfen; nicht sofort die gesamte Funkverbindung zurücksetzen |
+
+## 4. Lab 3B – Recovery-Strategie entwickeln
+
+Die Recovery soll möglichst wenig invasiv beginnen. Nicht jeder Fehler rechtfertigt einen Reset.
+
+Stufe 1: Diagnose
+
+`AT+CEREG?`, `AT+CESQ`, Modem-Firmwareversion und relevante Fehlercodes erfassen. Prüfen, ob das Modem noch auf AT-Kommandos reagiert.
+
+Stufe 2: Backoff
+
+Vor dem nächsten Versuch warten. Die Wartezeit steigt mit aufeinanderfolgenden Fehlversuchen, begrenzt auf einen konfigurierten Maximalwert.
+
+Stufe 3: Gezielte Wiederherstellung
+
+Wenn die Registrierung verloren ist, Funk- und Registrierungszustand erneut bewerten. Erst bei einem begründeten Fehlerbild einen kontrollierten Neustart erwägen.
+
+Stufe 4: Reset als letzte Maßnahme
+
+Wenn das Modem nicht mehr reagiert oder ein schwerer interner Fehler vorliegt, einen begrenzten Reset-Versuch durchführen und danach die Initialisierung vollständig wiederholen.
+
+### Beispiel für exponentiellen Backoff
+
+Eine einfache Strategie ist:
+
+\\[ t_n=\min(t\_{\max},t_0\cdot 2^n) \\]
+
+Mit einem Startwert von 2 Sekunden und einem Maximalwert von 60 Sekunden ergibt sich beispielsweise:
+
+| Fehlversuch   | Wartezeit |
+| ------------- | --------- |
+| 1             | 2 s       |
+| 2             | 4 s       |
+| 3             | 8 s       |
+| 4             | 16 s      |
+| 5             | 32 s      |
+| 6 und weitere | 60 s      |
+
+Für den Produktivbetrieb empfiehlt sich zusätzlich ein Zufallsanteil (jitter), damit viele Geräte nach einem Netzausfall nicht gleichzeitig erneut versuchen, sich zu registrieren. Die Wartezeit sollte nicht blockierend implementiert werden: Verwende einen Zephyr-Timer, eine Work Queue oder eine verzögerte Zustandsmaschinenaktion.
+
+## 5. Beispiel: Zustandsmaschine in C
+
+Das folgende Beispiel zeigt die Struktur der Logik, unabhängig von einer konkreten `modem_chat`-API-Implementierung. Die AT-Befehle müssen über die zentrale Kommunikationsschicht aus Lab 2 ausgeführt werden.
+
+```
+enum cellular_state {
+    MODEM_INIT,
+    RADIO_ENABLE,
+    REGISTERING,
+    REGISTERED,
+    DATA_READY,
+    RECOVERY,
+};
+
+static enum cellular_state state = MODEM_INIT;
+static unsigned int retry_count;
+
+static uint32_t recovery_delay_ms(unsigned int retries)
+{
+    uint32_t delay = 2000U;
+
+    for (unsigned int i = 0; i < retries && delay < 60000U; i++) {
+        delay *= 2U;
+    }
+
+    return MIN(delay, 60000U);
+}
+
+static void on_registration_status(int status)
+{
+    switch (status) {
+    case 1: /* Registered, home network */
+    case 5: /* Registered, roaming */
+        state = REGISTERED;
+        retry_count = 0;
+        break;
+
+    default:
+        state = RECOVERY;
+        break;
+    }
+}
+```
+
+Für eine echte Implementierung ergänzen:
+
+- `+CEREG`-URCs robust parsen und das Statusfeld korrekt extrahieren.
+- Zustandsänderungen über Events oder eine Queue an einen einzigen State-Machine-Thread übergeben.
+- Status `1` oder `5` zunächst nur als registriert werten; `DATA_READY` erst nach erfolgreicher Prüfung des benötigten Datenpfads setzen.
+- Backoff nur bei relevanten Fehlern erhöhen und nach erfolgreicher Wiederherstellung zurücksetzen.
+- Wiederholungen, Fehlerursachen und die letzte erfolgreiche Datenübertragung protokollieren.
+
+## 6. Lab 3C – Fehlerdiagnose in Teams
+
+Wähle einen Fehlerfall und entwickle die passende Recovery-Strategie.
+
+Welches Fehlerbild möchtest du analysieren?
+
+A – Registrierung geht bei schwachem Signal wiederholt verloren.
+
+B – Registrierung erfolgreich, aber keine Datenübertragung.
+
+C – Modem antwortet zeitweise nicht mehr auf AT-Kommandos.
+
+Diagnose anzeigen
+
+Nordic nennt Antennen- oder Bandprobleme, eine nicht aktivierte SIM, fehlende APN-Konfiguration und schwache Signalqualität als typische Ursachen für Registrierungs- oder Datenprobleme.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://nrfconnectdocs.nordicsemi.com\&sz=32)
+
+nRF Connect SDK 3.4.99 documentation+1
+
+
+
+## 7. Zeitplan für die 45 Minuten
+
+### 0–8
+
+Minuten
+
+Zustandsmodell und Registrierung
+
+### 8–18
+
+Minuten
+
+URCs und Statusübergänge implementieren
+
+### 18–30
+
+Minuten
+
+Backoff und Recovery entwickeln
+
+### 30–40
+
+Minuten
+
+Fehlerfälle analysieren
+
+### 40–45
+
+Minuten
+
+Review und Abnahmekriterien
+
+### Abnahmekriterien
+
+- Die Registrierung wird über URCs oder eine gezielte Statusabfrage erkannt.
+- Registrierungsverlust führt zu einem definierten Zustandswechsel.
+- Backoff verhindert schnelle, unbegrenzte Wiederholungen.
+- Registrierung und tatsächliche Datenübertragung werden getrennt bewertet.
+- Ein Modemreset wird nicht als Standardreaktion auf jeden Netzwerkfehler verwendet.
+
+Übergang zu Lab 4: Im nächsten Lab wechselt der Schwerpunkt auf PPP über CMUX und IP-Netzwerkzugriff: UART-Multiplexing, PPP-Interface, Zephyr-Sockets und die Trennung von AT-Steuerkanal und Datentransport.

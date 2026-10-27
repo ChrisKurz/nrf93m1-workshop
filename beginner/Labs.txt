@@ -1,0 +1,136 @@
+„From Zero to Cloud“ – Wir bringen das nRF93M1 DK ins Mobilfunknetz, senden Telemetrie an nRF Cloud und bauen schrittweise eine kleine Embedded-Anwendung.
+1. Zielbild des Workshops
+
+
+
+
+
+
+
+
+
+Hardware kennenlernen
+
+Das nRF93M1 DK, die Host-MCU, das Mobilfunkmodem, SIM und Antenne verstehen.
+
+
+
+
+
+
+
+
+
+
+
+Erste Verbindung herstellen
+
+AT-Commands ausführen, Modemstatus prüfen und die Mobilfunkregistrierung nachvollziehen.
+
+
+
+
+
+
+
+
+
+
+
+Daten in die Cloud senden
+
+Ein Gerät provisionieren, eine Nachricht senden und den Empfang in nRF Cloud überprüfen.
+
+
+
+
+
+
+
+
+
+
+
+Eine eigene Anwendung bauen
+
+Eine vorbereitete Firmware anpassen, einen Messwert übertragen und einfache Fehler analysieren.
+
+
+
+2. Detaillierte Agenda für den Einsteiger-Tag
+09:00–16:00 Uhr · 6 Stunden Nettozeit · 2 kurze Pausen und 30 Minuten Mittagspause
+Zeit	Modul	Ergebnis
+09:00–09:30	Einführung in Cellular IoT	Architektur und LTE Cat 1 bis verstehen
+09:30–10:15	Hardware und AT-Commands	Erste Kommunikation mit dem Modem
+10:15–11:00	Mobilfunk und Provisionierung	Netzstatus prüfen und Cloud-Gerät vorbereiten
+11:00–11:15	Pause	
+11:15–12:15	Erste Nachricht an nRF Cloud	Erfolgreiche Cloud-Übertragung
+12:15–12:45	Mittagspause	
+12:45–13:45	Erste Host-Anwendung	Firmware anpassen und Daten senden
+13:45–14:00	Pause	
+14:00–15:00	Troubleshooting	Fehler systematisch eingrenzen
+15:00–16:00	Abschlussprojekt	Eigenständige Telemetrie-Demo
+
+3. So würde ich die Hands-on-Labs aufbauen
+Lab 1 – Talk to the modem
+45 Minuten
+Die Teilnehmer schließen das DK an und führen vorbereitete AT-Commands aus.
+
+Aufgaben
+- Modem antwortet auf AT
+- Firmware- und Geräteinformationen auslesen
+- SIM-Status und Netzregistrierung prüfen
+- Signalqualität und Statusmeldungen interpretieren
+Erfolgskriterium: Jeder Teilnehmer kann zeigen, dass sein Modem antwortet und den aktuellen Netzstatus erklären.
+
+Lab 2 – Bring the device online
+45 Minuten
+Die Teilnehmer verbinden ihr Gerät mit dem Mobilfunknetz und bereiten die nRF-Cloud-Registrierung vor.
+
+Aufgaben
+- SIM und Netzregistrierung prüfen
+- Geräteidentität ermitteln
+- Gerät dem vorgesehenen nRF-Cloud-Team zuordnen
+- Typische Konfigurationsfehler erkennen
+Erfolgskriterium: Das Gerät ist korrekt provisioniert.
+
+Lab 3 – Send your first cloud message
+60 Minuten
+Die Teilnehmer senden über die Modemfunktionen eine erste Telemetrie-Nachricht an nRF Cloud.
+
+Beispiel für den Inhalt:
+{
+  "appId": "workshop",
+  "sequence": 1,
+  "temperature": 23.5
+}
+
+
+Aufgaben
+- Nachrichtenformat kennenlernen
+- Cloud-Messaging-AT-Command verwenden
+- Rückmeldung des Modems auswerten
+- Nachricht in nRF Cloud verifizieren
+Erfolgskriterium: Eine selbst ausgelöste Nachricht ist nachweislich in der Cloud angekommen.
+
+Hinweis: Das endgültige Payload-Format muss mit dem vorgesehenen nRF-Cloud-Messaging-Endpunkt und der tatsächlich unterstützten Modem-Firmware abgeglichen werden.
+
+Lab 4 – From terminal to firmware
+60 Minuten
+Die Teilnehmer verwenden ein vorbereitetes Host-Projekt auf dem nRF54L15.
+
+Aufgaben
+- Projekt öffnen, bauen und flashen
+- Einen Parameter im C-Code verändern
+- Eine Telemetrie-Nachricht aus der Firmware auslösen
+- Die Übertragung anhand von Logs und Cloud-Daten prüfen
+Erfolgskriterium: Die eigene Firmware löst die Datenübertragung aus.
+
+Lab 5 – Troubleshooting Challenge
+60 Minuten
+Kleine Teams bekommen vorbereitete Fehlerfälle.
+- Modem antwortet nicht
+- Gerät registriert sich nicht im Netz
+- Cloud-Nachricht wird nicht angenommen
+- Firmware wartet auf eine nicht eintreffende Antwort
+Erfolgskriterium: Die Teams benennen die Ursache, zeigen die relevanten Diagnoseinformationen und schlagen eine Lösung vor.

@@ -1,0 +1,291 @@
+# 5. Trainerkonzept – Vorbereitung und Lab 1 im Detail
+
+Ich würde als technische Basis die offizielle nRF93M1-AT-Host-Anwendung verwenden. So können die Teilnehmer zuerst das Modem direkt über den PC bedienen und später sehen, wie dieselben AT-Commands aus einer Host-Anwendung auf dem nRF54L15 ausgelöst werden. Nordic dokumentiert diesen Ablauf einschließlich nRF-Cloud-Onboarding.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://docs.nordicsemi.com\&sz=32)
+
+Nordic Semiconductor+1
+
+
+
+## A. Vorbereitung durch den Trainer
+
+### Checkliste vor dem Workshop
+
+## Trainer-Checkliste
+
+0/16 erledigt
+
+Hardware
+
+Jedes DK identifizieren und einer Person zuordnen
+
+LTE-Antenne anschließen und SIM prüfen
+
+USB1 und den AT-Port auf jedem DK testen
+
+Mindestens ein Ersatz-DK und Ersatzkabel bereithalten
+
+Software
+
+nRF Connect for Desktop und Serial Terminal testen
+
+nRF Util installieren und Geräteerkennung prüfen
+
+Modem-Firmwareversion je DK dokumentieren
+
+Serielle Schnittstelle mit 115200 Baud testen
+
+Cloud
+
+Teilnehmer legen ihre individuellen nRF-Cloud-Accounts vorab an
+
+Zugriff auf Fleet > Devices überprüfen
+
+Onboarding mit einem Testgerät vollständig durchführen
+
+Prüfen, ob jeder Teilnehmer ein Gerät claimen darf
+
+Workshop-Unterlagen
+
+AT-Command-Spickzettel ausdrucken oder verteilen
+
+Erwartete Beispielantworten bereitstellen
+
+Fehlerbehebung für fehlende Modemantworten vorbereiten
+
+Musterlösung und funktionierende Referenz-Firmware bereithalten
+
+### Individuelle nRF-Cloud-Accounts
+
+Da jeder Teilnehmer seinen eigenen Account verwendet, sollte er möglichst vor dem Workshop angelegt und die Anmeldung getestet sein. Im Workshop werden dann individuelle Geräte dem jeweiligen Account zugeordnet.
+
+Wichtig für die Durchführung:
+
+- Der Trainer sollte den Claim-Prozess vorab mit einem unbeanspruchten Testgerät durchspielen.
+- Die Teilnehmer sollten die Geräte-UUID und das Registrierungstoken nur in ihrem eigenen Account verwenden.
+- JWTs und andere temporäre Zugangsdaten gehören nicht in gemeinsame Screenshots, Git-Repositories oder Präsentationsfolien.
+- Falls der Claim-Prozess fehlschlägt, muss der Trainer eine funktionierende Referenzdemo zeigen können.
+
+## B. Lab 1 – Talk to the modem
+
+45 Minuten
+
+Einzelarbeit mit Trainer-Support
+
+# Ziel: Die erste erfolgreiche AT-Kommunikation
+
+Am Ende des Labs kann jeder Teilnehmer das Modem über eine serielle Schnittstelle ansprechen, die Firmwareversion ermitteln, unterstützte Befehle entdecken und den Mobilfunkstatus interpretieren.
+
+### Ablauf für den Trainer
+
+| Zeit      | Aktivität                                    | Dauer  |
+| --------- | -------------------------------------------- | ------ |
+| 00–05 min | DK anschließen, Antenne und SIM prüfen       | 5 min  |
+| 05–10 min | COM-Port identifizieren und Terminal öffnen  | 5 min  |
+| 10–20 min | Erste AT-Commands ausführen                  | 10 min |
+| 20–30 min | Firmware, Befehlsliste und Netzstatus prüfen | 10 min |
+| 30–40 min | Kleine Diagnoseaufgabe                       | 10 min |
+| 40–45 min | Ergebnisse prüfen und besprechen             | 5 min  |
+
+### Schritt 1 – Hardware und seriellen Port prüfen
+
+Teilnehmeranweisung
+
+1. LTE-Antenne anschließen und die SIM prüfen.
+2. Das DK über den vorgesehenen USB-Anschluss mit dem Rechner verbinden.
+3. Ein Terminal öffnen und die seriellen Einstellungen auf 115200 Baud konfigurieren.
+
+Die offizielle Nordic-Anleitung verwendet `USB1`, `nrfutil device list` und den Port `vcom1` für den direkten AT-Zugang.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://nrfconnectdocs.nordicsemi.com\&sz=32)
+
+nRF Connect SDK 3.4.99 documentation+1
+
+
+
+Im Terminal ausführen:
+
+```
+nrfutil device list
+```
+
+Erwartetes Ergebnis: Das DK wird erkannt und der passende serielle Port kann identifiziert werden.
+
+Trainerhinweis: Der Portname hängt vom Betriebssystem und der verwendeten Firmware bzw. dem geflashten Beispiel ab. Nicht voraussetzen, dass er auf jedem Laptop identisch heißt.
+
+### Schritt 2 – Die ersten AT-Commands
+
+Die folgenden Befehle sind eine gute Basis für das Arbeitsblatt. Die ersten vier sind in der aktuellen Nordic-Anleitung als Bring-up-Sequenz dokumentiert.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://nrfconnectdocs.nordicsemi.com\&sz=32)
+
+nRF Connect SDK 3.4.99 documentation
+
+
+
+## Command 1: Modem antwortet
+
+Eingabe im seriellen Terminal
+
+```
+AT
+```
+
+Erwartete Antwort
+
+```
+OK
+```
+
+Lernziel: Das Terminal kommuniziert mit dem Modem. Noch keine Aussage über die Mobilfunkverbindung.
+
+## Command 2: Aussagekräftige Fehler aktivieren
+
+```
+AT+CMEE=2
+```
+
+Erwartete Antwort
+
+```
+OK
+```
+
+Lernziel: Bei späteren Fehlern liefert das Modem nach Möglichkeit einen genaueren Fehlercode statt nur `ERROR`.
+
+## Command 3: Modem-Firmwareversion auslesen
+
+```
+AT+CGMR
+```
+
+Erwartete Antwort
+
+```
+<Firmware-Version>
+OK
+```
+
+Lernziel: Jeder Teilnehmer notiert seine Modem-Firmwareversion. Diese Information ist später für die Fehlersuche wichtig.
+
+## Command 4: Unterstützte AT-Commands ermitteln
+
+```
+AT+CLAC
+```
+
+Erwartete Antwort
+
+Eine Liste der verfügbaren AT-Commands, gefolgt von `OK`.\
+Lernziel: Die Teilnehmer sehen, dass das Modem selbst eine umfangreiche Schnittstelle bereitstellt und die tatsächlich verfügbaren Befehle abgefragt werden können.
+
+### Schritt 3 – Mobilfunkstatus verstehen
+
+Nun geht es von der seriellen Kommunikation zur Mobilfunkverbindung.
+
+```
+AT+CEREG?
+```
+
+Eine mögliche Beispielantwort ist:
+
+```
++CEREG: 1,1,"1A2B","01234567",7
+OK
+```
+
+Die konkreten Werte können abweichen. Entscheidend ist der zweite Parameter:
+
+| Wert | Bedeutung                                          |
+| ---- | -------------------------------------------------- |
+| `1`  | Im Heimnetz registriert                            |
+| `5`  | Im Roamingnetz registriert                         |
+| `2`  | Registrierung läuft                                |
+| `0`  | Nicht registriert und keine laufende Registrierung |
+| `3`  | Registrierung abgelehnt                            |
+
+Die ersten beiden Werte (`1` oder `5` an zweiter Position) bedeuten, dass das Modem registriert ist.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://nrfconnectdocs.nordicsemi.com\&sz=32)
+
+nRF Connect SDK 3.4.99 documentation
+
+
+
+Falls das Modem noch nicht registriert ist, wird als nächster Schritt der Funkbetrieb geprüft bzw. aktiviert:
+
+```
+AT+CFUN=1
+```
+
+Danach erneut:
+
+```
+AT+CEREG?
+```
+
+Wichtig: Nordic dokumentiert, dass das nRF93M1 standardmäßig mit `AT+CFUN=0` startet und sich nicht automatisch im Mobilfunknetz registriert. `AT+CFUN=1` aktiviert den vollständigen Funkbetrieb.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://nrfconnectdocs.nordicsemi.com\&sz=32)
+
+nRF Connect SDK 3.4.99 documentation+1
+
+
+
+### Vor dem Workshop verifizieren
+
+- Prüfen, ob das verwendete Modem-Firmware-Image beim Start tatsächlich `CFUN=0` verwendet.
+- Sicherstellen, dass die SIM aktiv ist und LTE Cat 1 bis am Veranstaltungsort unterstützt wird.
+- Genügend Zeit für die erste Netzregistrierung einplanen.
+- Bei einem Wechsel des DK-Beispiels prüfen, ob der direkte Modemzugang weiterhin verfügbar ist.
+
+### Schritt 4 – Mini-Diagnoseaufgabe
+
+Gebt den Teilnehmern drei Situationen vor und lasst sie die passende Diagnose bestimmen.
+
+Situation A
+
+`AT` liefert `OK`, aber `AT+CEREG?` meldet noch keine Registrierung.
+
+Serielle Kommunikation funktioniert, aber Mobilfunkregistrierung ist noch nicht bestätigt.
+
+Das Modem ist definitiv defekt.
+
+Die Cloud-Verbindung ist bereits erfolgreich.
+
+Richtig.Zuerst Funkbetrieb, SIM, Abdeckung und Registrierungsstatus prüfen.
+
+### Abnahmekriterien für Lab 1
+
+Ein Teilnehmer ist fertig, wenn er:
+
+- eine Antwort auf `AT` erhalten hat;
+- die Modem-Firmwareversion dokumentiert hat;
+- die verfügbaren AT-Commands abfragen kann;
+- den Status von `AT+CEREG?` korrekt interpretiert;
+- erklären kann, warum eine funktionierende serielle Verbindung noch keine LTE- oder Cloud-Verbindung beweist.
+
+## C. Firmware-Kompatibilität – verbindliche Trainerprüfung
+
+Bevor ihr diese Anleitung als finale Teilnehmerunterlage verteilt, würde ich alle relevanten Befehle einmal auf genau der Modem-Firmware ausführen, die ihr im Workshop einsetzen wollt.
+
+| Befehl / Funktion        | Prüfung                                                               |
+| ------------------------ | --------------------------------------------------------------------- |
+| `AT`, `AT+CMEE=2`        | Syntax, Antwort und Terminaleinstellungen prüfen                      |
+| `AT+CGMR`                | Tatsächliche Modem-Firmwareversion dokumentieren                      |
+| `AT+CLAC`                | Vorhandene Befehle mit der Dokumentation abgleichen                   |
+| `AT+CEREG?`              | Ausgabeformat und Registrierungsstatus prüfen                         |
+| `AT+CFUN=1`              | Funkbetrieb und Registrierung mit der eingesetzten SIM verifizieren   |
+| `%DEVICEUUID`, `%REGJWT` | Cloud-Onboarding mit dem individuellen Team-ID-Workflow testen        |
+| `%NRFCLOUDMESSAGE`       | Payload, Antwort und `%COAP`-Status auf der konkreten Firmware prüfen |
+
+Nordic weist ausdrücklich darauf hin, dass einzelne AT-Commands und auch einzelne Parameter erst ab bestimmten Modem-Firmwareversionen verfügbar sein können. `AT+CLAC` ist daher ein sinnvoller Bestandteil des Labs, ersetzt aber nicht den Abgleich mit dem passenden AT-Commands-Referenzhandbuch.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://nrfconnectdocs.nordicsemi.com\&sz=32)
+
+nRF Connect SDK 3.4.99 documentation+1
+
+
+
+Mein nächster Schritt wäre Lab 2: „Bring the device online“ – mit dem vollständigen Ablauf für den individuellen nRF-Cloud-Account, `AT%DEVICEUUID`, `AT%REGJWT="<team-id>"`, dem Claim-Prozess in Fleet und einer Checkliste für typische Onboarding-Fehler.

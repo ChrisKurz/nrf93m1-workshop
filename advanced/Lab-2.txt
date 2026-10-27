@@ -1,0 +1,261 @@
+# Advanced Workshop – Lab 2: Robuste AT-Kommunikation in Zephyr
+
+09:30–10:15 Uhr · Dauer: 45 Minuten · nRF93M1 DK mit nRF54L15 Host
+
+Aufgabe: Entwickle eine robuste AT-Kommunikationsschicht, die Antworten zuverlässig den richtigen Anfragen zuordnet, asynchrone Modemereignisse verarbeitet und bei Timeouts kontrolliert reagiert.
+
+Das zentrale Prinzip dieses Labs lautet: AT-Kommunikation ist kein einfaches „Senden und auf `OK` warten“. URCs können jederzeit eintreffen, Kommandos unterschiedlich lange dauern und die UART-Verbindung kann Daten verlieren. Zephyrs `modem_chat` bietet dafür Skripte, Antwortzuordnung und Timeout-Behandlung.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://nrfconnectdocs.nordicsemi.com\&sz=32)
+
+nRF Connect SDK 3.4.99 documentation+1
+
+
+
+## 1. Lernziele
+
+Am Ende können die Teilnehmenden:
+
+- `modem_chat` für eine UART-basierte AT-Schnittstelle konfigurieren;
+- Kommandoantworten von URCs unterscheiden;
+- Timeouts und Modemfehler gezielt behandeln;
+- UART-Flow-Control und Baudrate als mögliche Fehlerursachen prüfen;
+- erklären, warum ein eigener Parser mit einem simplen `OK`-Match in der Praxis nicht genügt.
+
+## 2. Versuchsaufbau
+
+nRF54L15 Host
+
+Zephyr-Anwendung mit `modem_chat`
+
+UART · RTS/CTS empfohlen
+
+nRF93M1 Modem
+
+AT-Kommandos, finale Result-Codes und asynchrone URCs
+
+Voraussetzungen:
+
+- nRF Connect SDK und Zephyr-Workspace funktionieren.
+- Das DK wird über USB angeschlossen.
+- Für den ersten Test ist das Modem erreichbar; Mobilfunkabdeckung ist für reine AT-Kommunikation nicht zwingend erforderlich.
+- Für direkte PC-Tests kann das Modem bypass sample verwendet werden. Für die Host-Anwendung wird `modem_chat` aktiviert.&#x20;
+
+  [image](https://www.google.com/s2/favicons?domain=https://nrfconnectdocs.nordicsemi.com\&sz=32)
+
+  nRF Connect SDK 3.4.99 documentation+1
+
+
+
+## 3. Lab 2A – Konfiguration und erster AT-Chat
+
+Aktiviere in der Host-Anwendung die benötigten Komponenten:
+
+```
+CONFIG_MODEM_MODULES=y
+CONFIG_MODEM_CHAT=y
+CONFIG_MODEM_BACKEND_UART=y
+```
+
+Diese Konfiguration aktiviert Zephyrs AT-Chat-Mechanismus und den UART-Backend-Pfad. Das konkrete UART-Device und die zugehörigen Pins müssen zur Board-Konfiguration passen.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://nrfconnectdocs.nordicsemi.com\&sz=32)
+
+nRF Connect SDK 3.4.99 documentation+1
+
+
+
+### Aufgaben
+
+1. Öffne die bestehende Host-Anwendung.
+2. Prüfe, welches UART-Device mit dem Modem verbunden ist.
+3. Initialisiere den UART-Backend-Pfad und die `modem_chat`-Instanz gemäß der API.
+4. Sende zunächst `AT` und erwarte `OK`.
+5. Führe danach `AT+CGMR` aus und erfasse die Modem-Firmware-Version.
+
+Die erwartete Interaktion sieht vereinfacht so aus:
+
+```
+TX: AT
+RX: OK
+
+TX: AT+CGMR
+RX: <Modem-Firmware-Version>
+RX: OK
+```
+
+Die tatsächliche Ausgabe kann zusätzlich Echo-Zeilen enthalten, abhängig von der Konfiguration des Modems.
+
+## 4. Lab 2B – URCs korrekt behandeln
+
+Eine URC (Unsolicited Result Code) ist eine Modemmeldung, die unabhängig von einem gerade gesendeten Kommando eintrifft. Ein wichtiges Beispiel ist die Änderung des Mobilfunk-Registrierungsstatus.
+
+### Versuch: Registrierung beobachten
+
+Sende im AT-Terminal:
+
+```
+AT+CMEE=2
+AT+CEREG=2
+AT+CFUN=1
+AT+CEREG?
+```
+
+`AT+CEREG=2` aktiviert detailliertere Registrierungsbenachrichtigungen. Die genaue Ausgabe hängt vom Modem-Firmwarestand und dem Netz ab. `AT+CFUN=1` aktiviert die volle Modemfunktion; die Registrierung kann danach einige Zeit dauern.
+
+Eine mögliche Ereignisfolge:
+
+```
+TX: AT+CFUN=1
+RX: OK
+RX: +CEREG: 2,...       <-- asynchrones Ereignis
+RX: +CEREG: 2,...       <-- weitere Statusmeldung möglich
+```
+
+Die Zahlen in den `+CEREG`-Meldungen sind kontextabhängig. Bei `AT+CEREG?` bedeutet der Registrierungsstatus `1` „im Heimatnetz registriert“ und `5` „im Roaming registriert“. Eine URC darf nicht einfach als Antwort auf das zuletzt gesendete Kommando interpretiert werden.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://nrfconnectdocs.nordicsemi.com\&sz=32)
+
+nRF Connect SDK 3.4.99 documentation+1
+
+
+
+Aufgabe für die Teilnehmenden
+
+- Registrierungs-URCs vor dem Einschalten der Funkfunktion aktivieren.
+- URCs unabhängig von der Kommandoantwort protokollieren.
+- Den Netzwerkstatus anhand des tatsächlichen Registrierungsfeldes aktualisieren.
+- Nach einem Verlust der Registrierung nicht blind annehmen, dass die Verbindung weiterhin verfügbar ist.
+
+## 5. Lab 2C – Antwortzuordnung mit `modem_chat`
+
+Zephyr stellt Skript-Makros bereit, um ein Kommando mit den erwarteten Antworten zu verbinden. Das folgende Beispiel zeigt das Muster, nicht eine vollständige, unmittelbar kompilierbare Anwendung: UART-Pipe, Chat-Instanz und Callbacks müssen zum jeweiligen Projekt passen.
+
+```
+#include <zephyr/modem/chat.h>
+
+/* Finale Erfolgsantwort */
+MODEM_CHAT_MATCH_DEFINE(ok_match, "OK", "\r\n", NULL);
+
+/* Kommando und erwartete Antwort */
+MODEM_CHAT_SCRIPT_CMDS_DEFINE(version_cmds,
+    MODEM_CHAT_SCRIPT_CMD_RESP("AT+CGMR", ok_match)
+);
+
+/* In der Anwendung:
+ * 1. UART-Backend und modem_chat initialisieren
+ * 2. Chat an die Modem-Pipe anhängen
+ * 3. Skript ausführen
+ * 4. Erfolg, Abbruch oder Timeout im Callback behandeln
+ */
+```
+
+Für die echte Implementierung sollte die Version-Antwort außerdem als Datenzeile ausgewertet und `ERROR` beziehungsweise `+CME ERROR` als Fehler erkannt werden. Ein ausschließlich auf `OK` ausgerichtetes Skript ist für den vollständigen Produktivbetrieb nicht ausreichend. Die API unterstützt mehrere Antwort-Matches, Abbruch-Matches und Zeitlimits.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://nrfconnectdocs.nordicsemi.com\&sz=32)
+
+nRF Connect Docs+1
+
+
+
+### Architekturregel
+
+Vermeide es, dass mehrere Threads unabhängig voneinander Kommandos auf dieselbe AT-Schnittstelle schreiben. Verwende eine zentrale Kommunikationsinstanz oder eine Queue, die Anfragen serialisiert und jeweils einem aktiven Skript zuordnet.
+
+Wenn du später auf PPP über CMUX wechselst, gilt eine zusätzliche Einschränkung: Der Zephyr-Modemtreiber besitzt und verwaltet den AT-Kanal. Sende dann keine unabhängigen Kommandos direkt auf dieselbe UART; nutze den vorgesehenen AT-Shell-Zugang.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://nrfconnectdocs.nordicsemi.com\&sz=32)
+
+nRF Connect SDK 3.4.99 documentation+1
+
+
+
+## 6. Lab 2D – Timeouts und Fehler gezielt testen
+
+Nicht jeder AT-Befehl braucht dasselbe Zeitlimit. Ein einfaches Identifikationskommando wie `AT+CGMR` ist normalerweise schnell; Netzwerkregistrierung, Provisionierung und Firmware-Updates können deutlich länger dauern.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://nrfconnectdocs.nordicsemi.com\&sz=32)
+
+nRF Connect SDK 3.4.99 documentation+1
+
+
+
+Teste diese Fälle:
+
+Test A – Normalfall
+
+`AT` senden und `OK` empfangen. Erwartung: Skript endet erfolgreich.
+
+Test B – Kommandofehler
+
+Ein absichtlich ungültiges Kommando senden. Erwartung: Fehler wird erkannt, nicht als Erfolg behandelt.
+
+Test C – Timeout
+
+Für einen isolierten Parser-Test keine erwartete Antwort bereitstellen. Erwartung: Timeout-Callback wird ausgelöst; der Kommunikationszustand wird kontrolliert wiederhergestellt.
+
+Test D – URC während eines Kommandos
+
+Eine Registrierungsänderung während einer Anfrage beobachten. Erwartung: Die URC wird als Ereignis behandelt und nicht mit der eigentlichen Kommandoantwort verwechselt.
+
+Nach einem Timeout sollte die Anwendung nicht einfach das nächste Kommando senden, als wäre nichts passiert. Je nach Fehlerbild sind zunächst eine begrenzte Wartezeit, eine erneute Statusabfrage oder eine kontrollierte Wiederherstellung der AT-Schnittstelle sinnvoll.
+
+## 7. Fehlersuche: typische Symptome
+
+| Symptom                                       | Mögliche Ursache                                     | Nächster Prüfschritt                                  |
+| --------------------------------------------- | ---------------------------------------------------- | ----------------------------------------------------- |
+| Keine Antwort auf `AT`                        | Modem aus, falscher UART oder Baudrate               | Versorgung, Power-Sequenz und UART prüfen             |
+| Sporadische Parserfehler                      | UART-Überlauf oder fehlende Flow-Control             | RTS/CTS und Baudrate kontrollieren                    |
+| Nur `ERROR`                                   | Fehlerdetail nicht aktiviert                         | `AT+CMEE=2` setzen                                    |
+| Timeout bei Registrierung                     | Netzabdeckung, SIM oder lange Operation              | `AT+CEREG?` und Netzstatus prüfen                     |
+| Antwort passt scheinbar zum falschen Kommando | Gleichzeitige Zugriffe oder URC falsch klassifiziert | AT-Zugriffe serialisieren und Match-Regeln überprüfen |
+
+Nordic empfiehlt Hardware-Flow-Control mit RTS/CTS. Bei hohen Baudraten können ohne Flow-Control Bytes verloren gehen, was häufig als sporadischer Parserfehler statt als klarer UART-Fehler sichtbar wird.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://nrfconnectdocs.nordicsemi.com\&sz=32)
+
+nRF Connect SDK 3.4.99 documentation+1
+
+
+
+## 8. Zeitplan für die 45 Minuten
+
+### 0–5
+
+Min.
+
+Setup und Kconfig
+
+### 5–15
+
+Min.
+
+Erste Kommandos und `modem_chat`
+
+### 15–25
+
+Min.
+
+URCs und Registrierungsstatus
+
+### 25–37
+
+Min.
+
+Timeouts und Fehlerfälle
+
+### 37–45
+
+Min.
+
+Review und Debugging-Checkliste
+
+### Abnahmekriterien
+
+- Die Anwendung kann `AT+CGMR` zuverlässig ausführen.
+- Erfolgs- und Fehlerantworten werden unterschieden.
+- Registrierungs-URCs werden unabhängig von aktiven Kommandos verarbeitet.
+- Ein Timeout wird erkannt und protokolliert.
+- Es gibt keine konkurrierenden, unkoordinierten AT-Zugriffe.
+
+Übergang zu Lab 3: Mit einer robusten AT-Schicht kann die Anwendung jetzt eine übergeordnete Netzwerk-Zustandsmaschine aufbauen. Im nächsten Lab geht es um Registrierung, Verbindungsabbruch, Backoff und kontrollierte Wiederherstellung.

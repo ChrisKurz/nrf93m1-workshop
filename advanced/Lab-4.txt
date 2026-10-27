@@ -1,0 +1,253 @@
+# Advanced Workshop – Lab 4: PPP über CMUX und IP-Netzwerkzugriff
+
+11:15–12:15 Uhr · 60 Minuten · Nordic nRF93M1 DK / nRF54L15
+
+Ziel: Die Teilnehmenden bringen die PPP-Verbindung zwischen Host und Modem hoch, verstehen die CMUX-Kanalaufteilung und führen anschließend einen IP-Netzwerktest mit Zephyr-Sockets durch.
+
+Beim PPP-Modell übernimmt der nRF93M1 weiterhin den LTE-Zugang. Der nRF54L15-Host betreibt dagegen den IP-Stack und verwendet die Netzwerk-APIs von Zephyr. Über CMUX werden PPP-Daten und AT-Steuerung auf einer physischen UART-Verbindung getrennt.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://nrfconnectdocs.nordicsemi.com\&sz=32)
+
+nRF Connect SDK 3.4.99 documentation+1
+
+
+
+## 1. Datenpfad verstehen
+
+Anwendung auf dem nRF54L15
+
+z. B. UDP-Socket, TCP-Client oder Cloud-Anwendung
+
+Zephyr-Netzwerkstack
+
+IP · Routing · DNS · Sockets
+
+PPP-Datenkanal – CMUX DLCI 1
+
+UART zwischen Host und Modem
+
+CMUX transportiert mehrere logische Kanäle
+
+AT-Steuerkanal – CMUX DLCI 2
+
+Registrierung, Signalqualität und Modemdiagnose
+
+nRF93M1 → LTE Cat 1 bis → IP-Netz
+
+Die wesentliche Trennung:
+
+- DLCI 1: PPP-Datenverkehr für den Host-IP-Stack.
+- DLCI 2: AT-Kommandos für Steuerung und Statusüberwachung.
+
+Der Nordic-Treiber übernimmt die Initialisierung, CMUX-Aktivierung, APN-Konfiguration und den PPP-Aufbau. Auf dem DK ist die erforderliche Modem-Devicetree-Konfiguration bereits vorhanden.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://nrfconnectdocs.nordicsemi.com\&sz=32)
+
+nRF Connect SDK 3.4.99 documentation+1
+
+
+
+## 2. Voraussetzungen und Projektkonfiguration
+
+Benötigt werden:
+
+- nRF93M1 DK mit funktionierendem nRF54L15-Host;
+- installierter nRF Connect SDK mit passendem Workspace;
+- SIM mit aktivem Datentarif und geeigneter Netzabdeckung;
+- eine Modem-Firmware, die PPP und CMUX unterstützt.
+
+Für die Host-Firmware ist die offizielle PPP-Shell-Demo ein guter Ausgangspunkt. Sie bietet eine PPP-Verbindung, IPv4/IPv6-Unterstützung, Sockets und eine AT-Shell für Diagnosen.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://docs.nordicsemi.com\&sz=32)
+
+Nordic Semiconductor+1
+
+
+
+Die zentralen Kconfig-Optionen sind:
+
+```
+CONFIG_MODEM=y
+CONFIG_MODEM_CELLULAR=y
+CONFIG_NETWORKING=y
+CONFIG_NET_L2_PPP=y
+CONFIG_NET_IPV4=y
+CONFIG_NET_SOCKETS=y
+CONFIG_NET_MGMT=y
+CONFIG_NET_MGMT_EVENT=y
+CONFIG_MODEM_AT_SHELL=y
+```
+
+IPv6 kann bei Bedarf mit `CONFIG_NET_IPV6=y` ergänzt werden. Die tatsächliche Konfiguration hängt vom gewählten Sample und der NCS-Version ab; möglichst zunächst die bestehende Sample-Konfiguration verwenden.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://nrfconnectdocs.nordicsemi.com\&sz=32)
+
+nRF Connect SDK 3.4.99 documentation+1
+
+
+
+## 3. Lab 4A – PPP-Verbindung hochfahren
+
+### Schritt 1: Board und serielle Schnittstelle prüfen
+
+```
+nrfutil device list
+```
+
+Identifiziere das nRF93M1 DK und den seriellen Port VCOM0. Dieser ist die Host-Konsole des nRF54L15 und nicht mit dem direkt durchgeschleiften Modem-AT-Port zu verwechseln.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://docs.nordicsemi.com\&sz=32)
+
+Nordic Semiconductor+1
+
+
+
+### Schritt 2: PPP-Shell-Sample bauen und flashen
+
+Verwende das PPP-Shell-Sample aus der installierten NCS-Version und das Board-Target:
+
+```
+west build -b nrf93m1dk/nrf54l15/cpuapp -p
+west flash
+```
+
+Der genaue Build-Aufruf hängt davon ab, in welchem Verzeichnis sich das Sample befindet. `west flash` programmiert die Host-Firmware; es aktualisiert nicht die Modem-Firmware.
+
+### Schritt 3: Konsolenausgabe beobachten
+
+Öffne VCOM0 mit 115200 Baud und beobachte die Startmeldungen.
+
+Die erwartete Reihenfolge ist konzeptionell:
+
+1. Host initialisiert die UART- und Modemsteuerung.
+2. Modem antwortet auf die initialen AT-Kommandos.
+3. CMUX wird aktiviert und die logischen Kanäle werden geöffnet.
+4. PDP-Kontext und APN werden konfiguriert.
+5. PPP wird aufgebaut.
+6. Nach erfolgreicher Registrierung und PPP-Verbindung steht das Netzwerkinterface zur Verfügung.
+
+Die tatsächlichen Logmeldungen und Zeitabstände variieren mit Firmware, Netz und SIM.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://nrfconnectdocs.nordicsemi.com\&sz=32)
+
+nRF Connect SDK 3.4.99 documentation+1
+
+
+
+## 4. Lab 4B – IP-Verbindung überprüfen
+
+Die Registrierung allein reicht nicht. Prüfe, ob die Anwendung wirklich IP-Daten übertragen kann.
+
+Führe die folgenden Checks über die verfügbaren Shell-Kommandos des Samples aus. Die konkreten Kommandonamen hängen von der verwendeten Shell-Konfiguration ab.
+
+| Prüfung                               | Erwartung                              |
+| ------------------------------------- | -------------------------------------- |
+| Modem antwortet auf AT                | Steuerkanal ist funktionsfähig         |
+| `+CEREG` zeigt Status `1` oder `5`    | Modem ist registriert                  |
+| PPP-Interface ist aktiv               | PPP-Link ist aufgebaut                 |
+| IP-Adresse ist konfiguriert           | Host hat eine IP-Konfiguration         |
+| DNS-Auflösung gelingt, falls benötigt | Namensauflösung funktioniert           |
+| Socket-Test gelingt                   | IP-Datenpfad funktioniert Ende zu Ende |
+
+### Praktische Testaufgabe
+
+Wenn die PPP-Shell die Netzwerk- und Socket-Testkommandos anbietet, führe einen Test mit einem erreichbaren Server durch. Das Sample enthält außerdem `zperf` für Durchsatztests. Für einen reproduzierbaren Workshop empfiehlt sich ein kontrollierter eigener Server, statt einen öffentlichen Endpunkt als dauerhaft verfügbar vorauszusetzen.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://nrfconnectdocs.nordicsemi.com\&sz=32)
+
+nRF Connect SDK 3.4.99 documentation+1
+
+
+
+Abnahmekriterium: Nicht nur „PPP connected“ protokollieren, sondern eine erfolgreiche Socket-Übertragung nachweisen.
+
+## 5. Lab 4C – AT-Steuerung während PPP
+
+Ein häufiger Fehler ist, während aktiver PPP-Verbindung AT-Kommandos direkt auf dieselbe UART zu schreiben. Das kann den CMUX- und PPP-Datenstrom beschädigen.
+
+Nutze stattdessen die AT-Shell, die den vom Modemtreiber verwalteten Steuerkanal verwendet.
+
+Beispielsweise:
+
+```
+AT+CEREG?
+AT+CESQ
+AT+CGMR
+```
+
+Damit können die Teilnehmenden Registrierungsstatus, Signalqualität und Modem-Firmwareversion prüfen, während der PPP-Datenpfad aktiv bleibt. Die Kommandos müssen über die vom Sample bereitgestellte AT-Shell gesendet werden, nicht über einen unabhängigen UART-Zugriff.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://nrfconnectdocs.nordicsemi.com\&sz=32)
+
+nRF Connect SDK 3.4.99 documentation+1
+
+
+
+## 6. Fehlersuche nach Schichten
+
+### Fall A: Modem antwortet nicht
+
+Prüfe Versorgung, POWERKEY-/Reset-Sequenz, UART-Verbindung, Baudrate und Hardware-Flow-Control. Wenn die Initialisierung bereits vor CMUX scheitert, liegt der Fehler wahrscheinlich auf dieser Ebene.
+
+### Fall B: AT funktioniert, PPP kommt aber nicht hoch
+
+Prüfe CMUX-Aktivierung, SIM, APN, Netzabdeckung und die PPP-Fehlerprotokolle. Ein erreichbares AT-Interface beweist noch keine aktive Datenverbindung.
+
+### Fall C: PPP ist aktiv, Socket-Test scheitert
+
+Prüfe IP-Konfiguration, Routing, DNS, Zielserver und gegebenenfalls Firewall- oder TLS-Einstellungen. Nicht vorschnell das Modem zurücksetzen.
+
+### Fall D: Verbindung bricht sporadisch ab
+
+Korrelation zwischen Registrierungs-URCs, PPP-Linkstatus, Signalqualität und Versorgung herstellen. Prüfe auch, ob mehrere Komponenten gleichzeitig auf den AT-Kanal zugreifen.
+
+Diese Schichtung ist die wichtigste Debugging-Technik des Labs: UART/Modem → CMUX → PPP → IP → DNS/Sockets → Anwendung. Jeder Schritt sollte einzeln überprüfbar sein.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://nrfconnectdocs.nordicsemi.com\&sz=32)
+
+nRF Connect SDK 3.4.99 documentation+1
+
+
+
+## 7. Zeitplan für die 60 Minuten
+
+### 0–10
+
+Min.
+
+Architektur und CMUX-Kanäle
+
+### 10–25
+
+Min.
+
+PPP-Sample bauen, flashen und starten
+
+### 25–40
+
+Min.
+
+IP- und Socket-Konnektivität nachweisen
+
+### 40–52
+
+Min.
+
+AT-Diagnose und Fehlerfälle
+
+### 52–60
+
+Min.
+
+Review und Abnahmekriterien
+
+### Checkliste zur Abnahme
+
+- PPP-Shell-Sample startet auf dem nRF54L15.
+- Modeminitialisierung und CMUX-Aufbau gelingen.
+- Mobilfunkregistrierung und PPP-Link sind aktiv.
+- Ein IP-/Socket-Test ist erfolgreich.
+- AT-Diagnose funktioniert über den vorgesehenen CMUX-Steuerkanal.
+- Die Teilnehmenden können erklären, ob ein Fehler vor oder nach dem PPP-Link liegt.
+
+Übergang zu Lab 5: Als Nächstes geht es um zuverlässige Datenübertragung und Sicherheit: Bestätigungen, Wiederholungen, TLS/DTLS-Verantwortung, Credential-Speicherung und die Frage, wie Anwendungen doppelte Nachrichten und unklare Übertragungsergebnisse sicher behandeln.

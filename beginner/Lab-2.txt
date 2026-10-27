@@ -1,0 +1,358 @@
+# Lab 2: Das nRF93M1 DK online bringen
+
+Einsteiger-Workshop · 45 Minuten · Trainerleitfaden mit Teilnehmerübung
+
+Lernziel: Am Ende dieses Labs können alle Teilnehmenden den Mobilfunkstatus ihres nRF93M1 DK prüfen, die Geräte-ID auslesen, das Gerät für nRF Cloud registrieren und die Voraussetzungen für eine Cloud-Verbindung überprüfen.
+
+Wichtig ist die Trennung zwischen drei Schritten:
+
+1. Modem ansprechen: Funktioniert die serielle AT-Schnittstelle?
+2. Mobilfunk herstellen: Ist das Modem im LTE-Netz registriert?
+3. Cloud-Provisionierung: Ist das Gerät in nRF Cloud bekannt und für die Kommunikation eingerichtet?
+
+Eine erfolgreiche AT-Antwort allein bedeutet noch nicht, dass LTE oder die Cloud funktionieren.
+
+## 1. Ablauf für 45 Minuten
+
+### 0–5
+
+Min.
+
+Ausgangszustand prüfen
+
+AT-Verbindung aus Lab 1 testen, Antenne und SIM kontrollieren.
+
+### 5–15
+
+Min.
+
+LTE-Registrierung prüfen
+
+Modem aktivieren und den Registrierungsstatus interpretieren.
+
+### 15–25
+
+Min.
+
+Gerät identifizieren und registrieren
+
+Geräte-UUID und Registration JWT ermitteln.
+
+### 25–35
+
+Min.
+
+Gerät in nRF Cloud hinzufügen
+
+Gerät in der Fleet-Ansicht hinzufügen und den Status prüfen.
+
+### 35–45
+
+Min.
+
+Erfolgskontrolle und Fehlersuche
+
+Ergebnisse vergleichen und typische Fehlerfälle besprechen.
+
+## 2. Voraussetzungen
+
+### Checkliste für Trainer und Teilnehmende
+
+nRF93M1 DK mit angeschlossener LTE-Antenne
+
+Antenne fest angeschlossen, bevor das Mobilfunkmodem aktiviert wird.
+
+SIM-Karte eingesetzt und Mobilfunkdienst verfügbar
+
+SIM und Tarif müssen die verwendete LTE-Cat-1-bis-Verbindung unterstützen.
+
+USB1 verbunden und AT-Terminal geöffnet
+
+In der Nordic-Anleitung: 115200 Baud; der konkrete Portname kann abweichen.
+
+nRF Cloud Account vorhanden
+
+Jede Person arbeitet mit dem eigenen Account und Team.
+
+Modem-Firmwareversion aus Lab 1 notiert
+
+Kommandos und Parameter vor dem Workshop gegen diese Version prüfen.
+
+0 von 5 Voraussetzungen geprüft
+
+Die AT-Schnittstelle wird laut Nordic über USB1 angesprochen; die Dokumentation nennt `vcom1` mit 115200 Baud als Beispiel. Je nach Betriebssystem, Firmware und verwendetem Sample kann der angezeigte Port anders heißen.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://nrfconnectdocs.nordicsemi.com\&sz=32)
+
+nRF Connect SDK 3.4.99 documentation+1
+
+
+
+## 3. Übung A – LTE-Registrierung prüfen (Minuten 0–15)
+
+### Schritt 1: Modem ansprechen
+
+Im seriellen Terminal:
+
+```
+AT
+```
+
+Erwartete Antwort:
+
+```
+OK
+```
+
+Dann die Fehlerausgaben aktivieren und Firmwareversion prüfen:
+
+```
+AT+CMEE=2
+AT+CGMR
+AT+CLAC
+```
+
+Erwartung:
+
+- `AT+CMEE=2` liefert `OK`.
+- `AT+CGMR` liefert eine Firmwareversion.
+- `AT+CLAC` listet die unterstützten AT-Kommandos auf.
+
+### Schritt 2: Modem aktivieren
+
+```
+AT+CFUN=1
+```
+
+Erwartete Antwort:
+
+```
+OK
+```
+
+Das Modem kann anschließend etwas Zeit benötigen, um das Mobilfunknetz zu finden und sich zu registrieren. Nicht unmittelbar nach dem `OK` von `AT+CFUN=1` davon ausgehen, dass die Registrierung bereits abgeschlossen ist. Nordic beschreibt diesen Befehl als Teil der grundlegenden Modem-Inbetriebnahme.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://nrfconnectdocs.nordicsemi.com\&sz=32)
+
+nRF Connect SDK 3.4.99 documentation
+
+
+
+### Schritt 3: Registrierungsstatus abfragen
+
+```
+AT+CEREG?
+```
+
+Eine beispielhafte Antwort:
+
+```
++CEREG: 1,1,"1A2B","01234567",7
+OK
+```
+
+Entscheidend ist der zweite Zahlenwert nach `+CEREG:`:
+
+| Zweiter Wert | Bedeutung                             |
+| ------------ | ------------------------------------- |
+| `1`          | Im Heimnetz registriert               |
+| `5`          | Im Roaming-Netz registriert           |
+| `0`          | Nicht registriert, keine aktive Suche |
+| `2`          | Suche nach einem Netz läuft           |
+| `3`          | Registrierung abgelehnt               |
+
+Die Beispielwerte für Zellkennung und weitere Felder sind nicht fest; sie hängen vom Netz und Modemstatus ab. Laut Nordic zeigen `1` und `5` an dieser Position eine erfolgreiche Registrierung an.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://nrfconnectdocs.nordicsemi.com\&sz=32)
+
+nRF Connect SDK 3.4.99 documentation
+
+
+
+Erfolgskriterium für diesen Abschnitt: Die Teilnehmenden können erklären, ob das Modem im LTE-Netz registriert ist. Falls nicht, dokumentieren sie den Status und gehen in die Fehlersuche, statt einfach fortzufahren.
+
+## 4. Übung B – Geräteidentität und Registrierungs-Token abrufen (Minuten 15–25)
+
+Das Ziel ist, die Geräteidentität und ein für das Onboarding benötigtes Token auszulesen.
+
+### Schritt 1: UUID auslesen
+
+```
+AT%DEVICEUUID
+```
+
+Beispielausgabe:
+
+```
+%DEVICEUUID: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+OK
+```
+
+Die UUID ist eine stabile Gerätekennung. Die Zeichenfolge oben ist nur ein Platzhalter – jede Person muss die UUID des eigenen Boards verwenden.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://nrfconnectdocs.nordicsemi.com\&sz=32)
+
+nRF Connect SDK 3.4.99 documentation
+
+
+
+### Schritt 2: Team-ID in nRF Cloud finden
+
+1. In nRF Cloud anmelden: [nRF Cloud öffnen](https://nrfcloud.com/?utm_source=chatgpt.com).
+2. Unten links die Legacy App öffnen.
+3. Das Menü oben rechts öffnen.
+4. Team auswählen.
+5. Die angezeigte Team ID notieren.
+6. Über NEW EXPERIENCE zurück zur neuen nRF-Cloud-Oberfläche wechseln.
+
+Die Bezeichnungen und Positionen in der Benutzeroberfläche können sich mit Updates ändern; im Zweifelsfall die aktuelle Nordic-Anleitung verwenden.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://nrfconnectdocs.nordicsemi.com\&sz=32)
+
+nRF Connect SDK 3.4.99 documentation
+
+
+
+### Schritt 3: Registration JWT anfordern
+
+Die eigene Team-ID in das Kommando einsetzen:
+
+```
+AT%REGJWT="<TEAM-ID>"
+```
+
+Beispiel einer schematischen Antwort:
+
+```
+%REGJWT: xxxxx.xxxxx.xxxxx
+OK
+```
+
+Wichtig: `<TEAM-ID>` einschließlich der spitzen Klammern ist ein Platzhalter und darf nicht wörtlich eingegeben werden. Die Anführungszeichen um die echte Team-ID bleiben erhalten.
+
+Beide Werte – UUID und Registration JWT – werden gleich im Cloud-Portal benötigt.
+
+Sicherheitshinweis
+
+Das Registration JWT wie ein Zugangstoken behandeln: nicht auf einem gemeinsamen Beamer zeigen, nicht in öffentliche Kurs-Chats kopieren und nach dem Workshop nicht in gemeinsam genutzten Logs ablegen. Nur im eigenen nRF-Cloud-Onboarding verwenden.
+
+Nordic weist außerdem darauf hin, dass die Gerätezeit gültig sein muss, damit JWTs akzeptiert werden. Falls die Anmeldung später mit einem Authentifizierungsfehler scheitert, ist die Systemzeit ein früher Prüfpunkt.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://nrfconnectdocs.nordicsemi.com\&sz=32)
+
+nRF Connect SDK 3.4.99 documentation
+
+
+
+## 5. Übung C – Gerät in nRF Cloud hinzufügen (Minuten 25–35)
+
+Die Teilnehmenden bleiben in ihrem eigenen nRF-Cloud-Account.
+
+[nRF Cloud Device Provisioning - nRF9151 Connect Kit](https://images.openai.com/static-rsc-4/nViTHLbteq-XUSyUe5j58tuHyiLW4uD70roLXLYO7TXOvXxpXvbt_TthteAvIH3fR9WkG_BiQp7AgzgMv6DRUodLr155HkEFrF2B5s-8hePZ4Oo2_uaLz7JPTUF8qSSHXCrPPcWLauaSK1gnqCHUkeOIB-6jaLS_JWCrOZMAYEQ?purpose=inline)
+
+1\. Fleet → Devices
+
+In nRF Cloud die Fleet-Ansicht und anschließend Devices öffnen.
+
+[Quickstart Nordic nRF52/nRF53/nRF54 Series | Memfault Docs](https://images.openai.com/static-rsc-4/BsOuIA2pdgL0j-ZYFYUhRCwMh1V5f9slfLfq1mK5giHyMWstzMvSR9CEXqMjuT21DfsnSoGgraFY1eC3zvnlRih_zAdlS8poSVUUn0t2jqW7m4Lv140ieGNVcAX5AxRhnTcUZDMtI4rRifrA9qJBKSoS5O7SsKHwDHIO1qYvhQY?purpose=inline)
+
+2\. Add Devices
+
+Auf Add Devices klicken und als Gerätetyp nRF93M1 auswählen.
+
+[nRF9160 Thing Plus Hookup Guide - SparkFun Learn](https://images.openai.com/static-rsc-4/1VKZU2AuY-kPo2x6r9v-SbR4u7lwWAUv2IB6EMmUD7FXlUL7BbpTZW6gqoSoZ6PpQ2O1jTURFVx8-z0zUpkvUsayL36EEDdC27LAKRIpONG0AFnzvgnvm1FYKQo9ZbBWMynRGUTKnXAMGJYYccJOIcSXtsvtLOUPMZNlt46KvF4?purpose=inline)
+
+3\. UUID und Registration JWT eingeben
+
+Beide Werte aus dem Terminal in die vorgesehenen Felder kopieren und die Eingabe überprüfen.
+
+[Not able to use Nordic Cloud REST API  to change Asset Tracker Config for an nRF9160-based prototype device. - Nordic Q&A - Nordic DevZone - Nordic DevZone](https://images.openai.com/static-rsc-4/o-9itxibfUE39ddmk5JZS_SuxW57wPqFu8t2uQxk8FhYpvPm2kXK0CV_piy-oMExVPrpFqXgWSymQ8MK3uKQY7YZ5aGLTDBK0UeO2qsAghE9OrE3jGQUlJmwbaTGVCxiIc-cehtn8Xa2g0B15LjkFSrJ0sEsXbDUNvOpoXOqVBs?purpose=inline)
+
+4\. Hinzufügen bestätigen
+
+Die Eingabe bestätigen und prüfen, ob das Gerät in der Geräteliste erscheint. Die Anzeige kann einige Sekunden benötigen.
+
+Diese Schritte entsprechen dem dokumentierten manuellen Provisionierungsablauf von Nordic.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://nrfconnectdocs.nordicsemi.com\&sz=32)
+
+nRF Connect SDK 3.4.99 documentation
+
+
+
+Trainerhinweis: Ein Gerät, das in der Fleet-Liste erscheint, ist damit provisioniert. Das allein beweist noch nicht, dass ein vollständiger Nachrichten-Upload erfolgreich war. Dieser wird im nächsten Lab explizit getestet.
+
+## 6. Troubleshooting – typische Fehlerbilder (Minuten 35–45)
+
+Diese Tabelle eignet sich als Arbeitsblatt: Die Teilnehmenden sollen zuerst selbst eine Ursache nennen und dann den nächsten sinnvollen Prüfschritt auswählen.
+
+| Symptom                                                              | Wahrscheinliche Ursache                                                  | Nächster Prüfschritt                                            |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------ | --------------------------------------------------------------- |
+| Keine Antwort auf `AT`                                               | Falscher Port, falsche Baudrate, Modem nicht bereit                      | USB-Verbindung und seriellen Port prüfen                        |
+| `AT` funktioniert, aber `CEREG` zeigt `0` oder `2`                   | Noch keine Registrierung oder Netzsuche läuft                            | Antenne, SIM, Abdeckung und Tarif prüfen; erneut abfragen       |
+| `CEREG` zeigt `3`                                                    | Registrierung abgelehnt                                                  | SIM-/Netzbetreiberfreigabe, Tarif und Netzkompatibilität prüfen |
+| `AT%DEVICEUUID` liefert `ERROR`                                      | Kommando nicht verfügbar oder nicht von dieser Firmware unterstützt      | `AT+CGMR`, `AT+CLAC` und Firmware-Kompatibilität prüfen         |
+| `AT%REGJWT` schlägt fehl                                             | Team-ID falsch, Token-Erzeugung fehlgeschlagen oder Systemzeit ungültig  | Team-ID und Zeitbasis kontrollieren                             |
+| Gerät erscheint nicht in Fleet                                       | Onboarding nicht abgeschlossen, falsche Daten oder Berechtigungsproblem  | UUID und JWT erneut prüfen; Eingabe und Account kontrollieren   |
+| Gerät erscheint in Fleet, aber es kommen später keine Nachrichten an | Provisionierung allein bestätigt noch keinen erfolgreichen Datentransfer | LTE-Status und Cloud-Transaktion im nächsten Lab testen         |
+
+Die genaue Verfügbarkeit von AT-Kommandos und Parametern ist firmwareabhängig. Nordic empfiehlt, die Version mit `AT+CGMR` zu erfassen und die unterstützten Kommandos über `AT+CLAC` zu prüfen.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://nrfconnectdocs.nordicsemi.com\&sz=32)
+
+nRF Connect SDK 3.4.99 documentation+1
+
+
+
+### Mini-Challenge für die Gruppe
+
+Szenario: Das Terminal antwortet auf `AT` mit `OK`. `AT+CEREG?` liefert aber `+CEREG: 0,2`. Was wisst ihr bereits – und was noch nicht?
+
+Das Modem ist vollständig mit nRF Cloud verbunden.
+
+Die serielle Kommunikation funktioniert; die LTE-Registrierung ist noch nicht abgeschlossen.
+
+Die SIM-Karte ist definitiv defekt.
+
+
+
+## 7. Abnahmekriterien für Lab 2
+
+Das Modem antwortet auf AT-Kommandos.
+
+Die Firmwareversion wurde dokumentiert.
+
+Der LTE-Registrierungsstatus wurde korrekt interpretiert.
+
+Die Geräte-UUID wurde ausgelesen.
+
+Das Registration JWT wurde mit der eigenen Team-ID erzeugt.
+
+Das eigene nRF93M1 wurde in nRF Cloud unter Fleet → Devices hinzugefügt.
+
+0 von 6 erfüllt
+
+In Arbeit
+
+## 8. Trainer-Vorbereitung und offizielle Dokumentation
+
+Vor dem Workshop unbedingt mit der tatsächlich eingesetzten Modem-Firmware testen:
+
+- `AT+CFUN=1` und `AT+CEREG?`
+- `AT%DEVICEUUID`
+- `AT%REGJWT="<TEAM-ID>"`
+- den vollständigen Onboarding-Ablauf mit einem Testgerät und einem eigenen nRF-Cloud-Team.
+
+Plane außerdem ein bereits provisioniertes Ersatzgerät ein. So kann die Gruppe bei Problemen mit SIM, Mobilfunkabdeckung oder Accounts trotzdem im nächsten Lab die erste Cloud-Nachricht senden.
+
+Offizielle Referenzen:
+
+- [Nordic: Connecting the nRF93M1 DK to nRF Cloud](https://nrfconnectdocs.nordicsemi.com/ncs/latest/nrf/app_dev/device_guides/nrf93m1/nrf93m1_cloud_connecting.html?utm_source=chatgpt.com)
+- [Nordic: AT command interface](https://nrfconnectdocs.nordicsemi.com/ncs/latest/nrf/app_dev/device_guides/nrf93m1/nrf93m1_at_commands.html?utm_source=chatgpt.com)
+- [Nordic: nRF93M1 AT Commands Reference Guide](https://docs.nordicsemi.com/r/bundle/ref_at_commands_nrf93m1/page/ref/at_commands_93/intro.html?contentId=kieJZ3WiLy7cTNnILKr_Hg\&utm_source=chatgpt.com)
+
+Übergang zu Lab 3: Sobald das Gerät provisioniert ist, geht es darum, eine erste Telemetrie-Nachricht an nRF Cloud zu senden und die Rückmeldungen des Modems auszuwerten. Dafür verwenden wir `AT%NRFCLOUDMESSAGE` und beobachten insbesondere die asynchronen `%COAP:`-Statusmeldungen.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://nrfconnectdocs.nordicsemi.com\&sz=32)
+
+nRF Connect SDK 3.4.99 documentation

@@ -1,0 +1,195 @@
+# Advanced Workshop – Lab 1: Architektur und Integrationsmodelle
+
+09:00–09:30 Uhr · Dauer: 30 Minuten · Nordic nRF93M1 DK
+
+Ziel: Die Teilnehmenden entscheiden anhand technischer Anforderungen, ob sie den nRF93M1 über AT-Kommandos oder über PPP über CMUX in eine Zephyr-Anwendung integrieren. Sie sollen erklären können, wo Netzwerkprotokolle laufen, welche Komponenten die Host-Firmware benötigt und welche Folgen die Architektur für Speicherbedarf, Energieverbrauch und Debugging hat.
+
+## 1. Lernziele
+
+Nach diesem Lab können die Teilnehmenden:
+
+- die Aufgaben von nRF54L15 Host-MCU und nRF93M1-Modem voneinander abgrenzen;
+- die Datenwege bei AT und PPP über CMUX skizzieren;
+- die passende Integration für ein konkretes Produkt auswählen;
+- typische Fehlerquellen an den Grenzen zwischen Host, Modem und Mobilfunknetz lokalisieren.
+
+## 2. Architektur verstehen
+
+### Host: nRF54L15
+
+Deine Anwendungsfirmware in Zephyr / nRF Connect SDK
+
+Applikation
+
+Sensoren, Geschäftslogik, Gerätezustand
+
+Netzwerk (optional)
+
+Zephyr-IP-Stack und Sockets bei PPP
+
+UART · Steuerung und Datentransport
+
+AT direkt oder AT + PPP-Kanäle über CMUX
+
+### Modem: nRF93M1
+
+Separates Nordic-Modem-Firmware
+
+Mobilfunk
+
+LTE Cat 1 bis, SIM, Registrierung
+
+Protokolle und Dienste
+
+IP, TCP/UDP, TLS/DTLS, CoAP, Cloud-Client
+
+Mobilfunknetz → Internet → Cloud-Dienst
+
+Der entscheidende Architekturpunkt: Beim AT-Modell übernimmt das Modem bereits den IP-Stack und viele Protokolle. Bei PPP läuft der IP-Stack auf dem Host, obwohl das Modem weiterhin die LTE-Verbindung bereitstellt. Die Host- und Modem-Firmware sind getrennte Softwarebereiche.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://nrfconnectdocs.nordicsemi.com\&sz=32)
+
+nRF Connect SDK 3.4.99 documentation+1
+
+
+
+## 3. Entscheidungsmatrix: AT oder PPP über CMUX?
+
+| Kriterium               | AT-Kommandos über UART                    | PPP über CMUX                                              |
+| ----------------------- | ----------------------------------------- | ---------------------------------------------------------- |
+| IP-Stack                | Im Modem                                  | Im Host                                                    |
+| Anwendung               | AT-Kommandos und Modemdienste             | Zephyr-Netzwerkinterface und Sockets                       |
+| Host-RAM/Flash          | Geringer                                  | Höher; zusätzlicher Netzwerkstack                          |
+| Bestehender Socket-Code | Anpassung an Modem-AT-Schnittstelle nötig | Kann meist die Host-Sockets verwenden                      |
+| Cloud-Anbindung         | Modem-Cloud-Client möglich                | Cloud-Client kann auf dem Host laufen                      |
+| Fehlersuche             | AT-Antworten, URCs und Modemstatus        | Zusätzlich PPP, IP, DNS und Socket-Ebene                   |
+| Typischer Einsatz       | Kleines, energieeffizientes Sensorgerät   | Anwendung benötigt Zephyr-Sockets oder vorhandenen IP-Code |
+
+Nordic weist darauf hin, dass PPP den Host-Footprint gegenüber dem AT-Modell grob verdoppeln kann. PPP ist deshalb nicht automatisch die bessere oder modernere Wahl – es ist sinnvoll, wenn die Anwendung tatsächlich einen Host-seitigen Netzwerkstack benötigt.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://nrfconnectdocs.nordicsemi.com\&sz=32)
+
+nRF Connect SDK 3.4.99 documentation+1
+
+
+
+## 4. Praktische Übung: Welches Modell würdest du wählen?
+
+Szenario A – Batteriebetriebener Sensor
+
+Ein Sensor sendet alle 10 Minuten wenige Messwerte an nRF Cloud. Die Anwendung benötigt keinen eigenen IP-Stack.
+
+AT-Kommandos
+
+PPP über CMUX
+
+Richtig: AT ist hier typischerweise die einfachere, ressourcenschonendere Wahl.
+
+Szenario B – Bestehende Zephyr-Anwendung
+
+Die Anwendung nutzt bereits BSD-Sockets, DNS und eine eigene Netzwerkabstraktion. Du möchtest diese Logik möglichst unverändert weiterverwenden.
+
+AT-Kommandos
+
+PPP über CMUX
+
+Richtig: PPP stellt dem Host ein Netzwerkinterface zur Verfügung, an das der Zephyr-Netzwerkstack anknüpfen kann.
+
+Szenario C – Kleiner Drittanbieter-Mikrocontroller
+
+Ein Controller ohne Zephyr-Netzwerkstack soll per UART einen HTTPS- oder Cloud-Datentransfer durchführen.
+
+AT-Kommandos
+
+PPP über CMUX
+
+Richtig: Der Host kann das Modem über AT steuern und geeignete Netzwerk- oder Cloud-Funktionen des Modems verwenden.
+
+Die Referenz für die Entscheidung ist die offizielle Nordic-Dokumentation zu [Host-Schnittstellen](https://nrfconnectdocs.nordicsemi.com/ncs/latest/nrf/app_dev/device_guides/nrf93m1/nrf93m1_interfaces.html?utm_source=chatgpt.com) und [Modemfunktionen](https://nrfconnectdocs.nordicsemi.com/ncs/latest/nrf/app_dev/device_guides/nrf93m1/nrf93m1_features.html?utm_source=chatgpt.com).
+
+## 5. Technischer Blick in die Implementierung
+
+### AT-Modell
+
+Typische Zephyr-Konfiguration:
+
+```
+CONFIG_MODEM_MODULES=y
+CONFIG_MODEM_CHAT=y
+CONFIG_MODEM_BACKEND_UART=y
+```
+
+Die Host-Anwendung sendet AT-Kommandos, wertet Antworten aus und behandelt URCs (Unsolicited Result Codes), also Meldungen, die unabhängig von einer gerade gesendeten Anfrage eintreffen können.
+
+### PPP-Modell
+
+Typische Konfiguration:
+
+```
+CONFIG_MODEM=y
+CONFIG_MODEM_CELLULAR=y
+CONFIG_NETWORKING=y
+CONFIG_NET_L2_PPP=y
+CONFIG_NET_IPV4=y
+CONFIG_NET_SOCKETS=y
+```
+
+CMUX teilt dabei die UART-Verbindung logisch auf: Ein Kanal transportiert PPP-Daten, ein anderer bleibt für AT-Steuerung und Statusabfragen verfügbar. Die offizielle Nordic-PPP-Shell-Demo ist ein sinnvoller Ausgangspunkt.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://nrfconnectdocs.nordicsemi.com\&sz=32)
+
+nRF Connect SDK 3.4.99 documentation+1
+
+
+
+Wichtige Regel: Beim PPP-Modell nicht einfach parallel beliebige AT-Daten auf dieselbe UART schreiben. Der Modemtreiber verwaltet den CMUX- und AT-Kanal; konkurrierende Zugriffe können den Protokollzustand durcheinanderbringen. Für Diagnosezwecke sollte die vorgesehene AT-Shell-Integration genutzt werden.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://nrfconnectdocs.nordicsemi.com\&sz=32)
+
+nRF Connect SDK 3.4.99 documentation+1
+
+
+
+## 6. Ablauf für die 30 Minuten
+
+### 0–8
+
+Minuten
+
+Architektur erklären
+
+Host/Modem-Aufteilung, UART, Mobilfunkstack, Cloud-Client und getrennte Firmware.
+
+### 8–16
+
+Minuten
+
+AT und PPP vergleichen
+
+Entscheidungsmatrix besprechen und Speicherbedarf, Energieverbrauch sowie Softwareaufwand abwägen.
+
+### 16–25
+
+Minuten
+
+Übung durchführen
+
+Die drei Szenarien beantworten lassen. Die Teilnehmenden müssen ihre Wahl technisch begründen.
+
+### 25–30
+
+Minuten
+
+Ergebnis sichern
+
+Jedes Team notiert ein Architekturdiagramm, seine Schnittstellenwahl und zwei Risiken für die spätere Fehlersuche.
+
+## 7. Abschlussfragen
+
+Die Gruppe sollte diese drei Fragen beantworten können:
+
+1. Warum benötigt das AT-Modell keinen Host-IP-Stack? Weil das Modem IP und weitere Netzwerkfunktionen selbst bereitstellt.
+2. Wann lohnt sich PPP? Wenn der Host ein echtes Netzwerkinterface beziehungsweise vorhandenen Socket-basierten Anwendungscode benötigt.
+3. Was muss bei beiden Modellen getrennt versioniert und diagnostiziert werden? Host-Anwendungsfirmware und Modem-Firmware.
+
+Ergebnis von Lab 1: Jedes Team hat eine begründete Architekturentscheidung getroffen. Im nächsten Lab wird diese Entscheidung praktisch: Lab 2 – Robuste AT-Kommunikation in Zephyr, inklusive URCs, Timeouts, Antwortzuordnung und Fehlerfällen.

@@ -1,0 +1,226 @@
+# Lab 5 – Zuverlässige Datenübertragung und Sicherheit
+
+12:45–13:45 Uhr · 60 Minuten · nRF93M1 DK / nRF54L15
+
+Ziel: Die Teilnehmenden bauen eine robuste Übertragung mit Fehlerbehandlung, Bestätigungen, kontrollierten Wiederholungen und sicherem Umgang mit Zugangsdaten. Sie können außerdem erklären, wo TLS/DTLS terminiert – im Modem oder im Host – und wie sich das zwischen AT- und PPP-Architektur unterscheidet.
+
+## 1. Zwei Architekturen, zwei Sicherheitsgrenzen
+
+### Variante A – AT-Modell mit nRF Cloud
+
+Host-Anwendung
+
+Messwerte und JSON-Payload
+
+AT-Kommando
+
+nRF93M1
+
+nRF Cloud Client · CoAP · DTLS 1.2
+
+nRF Cloud
+
+Der Cloud-Client und die DTLS-Sitzung laufen in der Modem-Firmware. Der Host kann den Cloud-Transportstatus über `%COAP:`-URCs beobachten.
+
+### Variante B – PPP mit Cloud-Client auf dem Host
+
+Host-Anwendung
+
+Messwerte und JSON-Payload
+
+Host-Netzwerkstack und Cloud-Client
+
+IP · CoAP · DTLS 1.2 · Credentials
+
+PPP über CMUX → nRF93M1 → LTE
+
+Der Host baut die Cloud-Sicherheitssitzung auf. Damit liegen mehr Netzwerk- und Sicherheitslogik sowie die zugehörigen Ressourcen im Host.
+
+Beim AT-Modell stellt der nRF93M1 den nRF-Cloud-Client bereit und verwendet CoAP über DTLS 1.2. Im PPP-Host-Anwendungsmodell läuft der Cloud-Client auf dem nRF54L15; der Mobilfunk-Datenpfad wird über PPP bereitgestellt.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://nrfconnectdocs.nordicsemi.com\&sz=32)
+
+nRF Connect SDK 3.4.99 documentation+2
+
+
+
+## 2. Lab 5A – Erfolgreiche Übertragung nachweisen
+
+Eine robuste Anwendung unterscheidet mindestens vier Ergebnisse:
+
+1. Das Kommando wurde vom Host abgesendet.
+2. Das Modem hat das Kommando akzeptiert.
+3. Der Transport hat eine Antwort vom Cloud-Endpunkt erhalten.
+4. Die Anwendung hat eine fachliche Bestätigung erhalten, falls diese erforderlich ist.
+
+`OK` ist nicht gleich „Nachricht in der Cloud angekommen“. Beim nRF93M1 melden `%COAP:`-URCs den Fortschritt und das Ergebnis einer CoAP-Transaktion. Eine erfolgreiche CoAP-Antwort – beispielsweise `2.01 Created` – ist ein stärkerer Nachweis als die bloße Annahme des AT-Kommandos. Sie beweist allerdings nicht automatisch, dass nachgelagerte Cloud-Verarbeitung oder ein Datenbank-Write abgeschlossen ist.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://nrfconnectdocs.nordicsemi.com\&sz=32)
+
+nRF Connect SDK 3.4.99 documentation+1
+
+
+
+### Aufgabe: Nachricht senden und Status protokollieren
+
+Im AT-Modell:
+
+```
+AT+CEREG?
+AT%NRFCLOUDMESSAGE
+```
+
+Die zweite Zeile ist hier nur ein Platzhalter für den Sendeaufruf. Verwendet die genaue Payload-Syntax aus dem AT Command Reference Guide der installierten Modem-Firmware. Eine mögliche Nachricht ist:
+
+```
+{
+  "appId": "ADVANCED_WORKSHOP",
+  "data": {
+    "messageId": "device-01-000042",
+    "sequence": 42,
+    "temperature": 21.7
+  }
+}
+```
+
+Beobachtet und protokolliert:
+
+- Zeit des Sendeversuchs;
+- eindeutige Nachrichten-ID und Sequenznummer;
+- sofortige AT-Antwort;
+- alle zugehörigen `%COAP:`-URCs;
+- finales Ergebnis und Dauer;
+- optional den Eingang der Nachricht in nRF Cloud.
+
+Wichtig: `%COAP:`-URCs können während anderer Cloud-Transaktionen eintreffen. Korreliert sie daher über den Transaktionszustand und die Ereignisfolge, statt jede URC blind der zuletzt gesendeten Nachricht zuzuordnen.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://nrfconnectdocs.nordicsemi.com\&sz=32)
+
+nRF Connect SDK 3.4.99 documentation+1
+
+
+
+## 3. Lab 5B – Retry-Strategie ohne Datenchaos
+
+Der kniffligste Fall ist ein unklares Übertragungsergebnis: Der Host wartet auf eine Bestätigung, aber die Verbindung bricht ab. Wurde die Nachricht übertragen? Ist die Bestätigung verloren gegangen? Ein erneuter Versand kann dann zu Duplikaten führen.
+
+Eine robuste Strategie verwendet eine eindeutige `messageId` und behandelt Wiederholungen ausdrücklich.
+
+Nachricht in Outbox speichern
+
+ID, Sequenznummer, Payload, Zeitstempel
+
+Senden und Ergebnis abwarten
+
+Bestätigt
+
+Nachricht als abgeschlossen markieren.
+
+Unklar / Fehler
+
+Status prüfen, Backoff anwenden, ggf. mit derselben ID wiederholen.
+
+### Aufgaben
+
+1. Erzeuge für jede neue Messung eine eindeutige Nachrichten-ID.
+2. Speichere ausstehende Nachrichten, wenn sie einen Neustart überleben müssen.
+3. Wiederhole bei vorübergehenden Netzwerkfehlern mit begrenztem Backoff.
+4. Verwende bei einer Wiederholung dieselbe ID für dieselbe logische Nachricht.
+5. Sorge auf der Empfängerseite für Deduplizierung, wenn Mehrfachverarbeitung unzulässig ist.
+
+Eine Nachrichten-ID allein verhindert keine Duplikate. Der Empfänger muss sie erkennen und bereits verarbeitete Nachrichten entsprechend behandeln. Auch ein Transport-ACK und eine fachliche Anwendungsbestätigung sind unterschiedliche Dinge.
+
+## 4. Lab 5C – TLS/DTLS und Credentials
+
+Beim nRF93M1 stehen TLS 1.2, TLS 1.3 und DTLS 1.2 zur Verfügung. nRF Cloud verwendet für den integrierten CoAP-Client DTLS 1.2. Das Modem bietet außerdem TLS-Kontexte und eine Dateisystem-Schnittstelle für Zertifikate und Schlüssel.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://docs.nordicsemi.com\&sz=32)
+
+Nordic Semiconductor+1
+
+
+
+| Sicherheitsfrage                  | AT-Modell mit nRF Cloud                                                             | PPP mit Cloud-Client auf Host                                                   |
+| --------------------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| Wo endet die DTLS-Sitzung?        | Im Modem                                                                            | Im Host                                                                         |
+| Wer verwaltet Cloud-Credentials?  | Modem-Cloud-Client und Provisionierungsprozess                                      | Host-Anwendung / Cloud-Bibliothek                                               |
+| Wo liegen Host-seitige Schlüssel? | Cloud-Schlüsselverwaltung im Modem; Host muss eigene Geheimnisse weiterhin schützen | Im geschützten Speicher des Hosts                                               |
+| Was muss getestet werden?         | Provisionierung, Gerätezeit, Cloud-URCs, DTLS-Status                                | Zertifikate, Trust Store, Systemzeit, TLS-/DTLS-Konfiguration und PPP-Datenpfad |
+
+### Sicherheitsaufgabe
+
+Diskutiert im Team folgende Fälle:
+
+- Ungültige Systemzeit: Ein JWT oder die Zertifikatsprüfung kann fehlschlagen. Vor einer Änderung der Credentials die Zeitbasis prüfen.
+- Zertifikat abgelaufen oder falsche CA: TLS-Fehlerursache erfassen, nicht die Serverauthentifizierung abschalten.
+- Schlüssel im Klartext geloggt: Logs bereinigen und die sichere Speicherung bzw. Provisionierung korrigieren.
+- DTLS-Timeout: Netzwerk-, Zeit- und Sitzungszustand untersuchen, bevor die Anwendung Credentials neu provisioniert.
+
+Die Gerätezeit ist für die nRF-Cloud-Authentifizierung relevant; Nordic dokumentiert außerdem die Speicherung von Zertifikaten, privaten Schlüsseln und Root-CAs im Modem-Dateisystem.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://nrfconnectdocs.nordicsemi.com\&sz=32)
+
+nRF Connect SDK 3.4.99 documentation+1
+
+
+
+Sicherheitsregel: Keine privaten Schlüssel, JWTs, PSKs oder vollständigen sensiblen Credentials in Workshop-Logs, Screenshots oder Versionskontrolle aufnehmen.
+
+## 5. Lab 5D – Fehlerszenarien
+
+Wähle ein Fehlerszenario
+
+A – Sendevorgang endet mit Timeout.
+
+B – Cloud meldet Authentifizierungs- oder DTLS-Fehler.
+
+C – Die Cloud sieht dieselbe Nachricht zweimal.
+
+D – CoAP-Antwort erfolgreich, fachliche Verarbeitung fehlt.
+
+Diagnose anzeigen
+
+## 6. Abnahmekriterien
+
+- Eine Nachricht wird mit eindeutiger ID übertragen und ihr Transportergebnis protokolliert.
+- Die Anwendung unterscheidet Kommandoannahme, CoAP-Ergebnis und fachliche Bestätigung.
+- Temporäre Fehler führen zu begrenzten Wiederholungen mit Backoff.
+- Wiederholungen erzeugen keine unkontrollierten Duplikate.
+- TLS-/DTLS-Fehler werden diagnostiziert, ohne Sicherheitsprüfungen abzuschalten.
+- Geheimnisse tauchen nicht in Logs oder im Quellcode auf.
+
+## 7. Zeitplan für die 60 Minuten
+
+### 0–10
+
+Min.
+
+Sicherheitsgrenzen AT vs. PPP
+
+### 10–25
+
+Min.
+
+Nachricht senden und Ergebnis verifizieren
+
+### 25–40
+
+Min.
+
+Outbox, Retry und Deduplizierung
+
+### 40–52
+
+Min.
+
+Credential- und Transportfehler untersuchen
+
+### 52–60
+
+Min.
+
+Review und Sicherheitscheck
+
+Als Referenz für die Umsetzung dienen die offizielle [nRF93M1-nRF-Cloud-Anleitung](https://nrfconnectdocs.nordicsemi.com/ncs/latest/nrf/app_dev/device_guides/nrf93m1/nrf93m1_cloud_connecting.html?utm_source=chatgpt.com) und die [Security-Dokumentation des Modems](https://docs.nordicsemi.com/r/bundle/ps_nrf93m1/page/chapters/security/security.html?utm_source=chatgpt.com).
+
+Übergang zu Lab 6: Als Nächstes optimieren wir das Gerät für den Feldeinsatz: Modem-Funktionalitätslevel, Sleep/Wake-up, Stromverbrauch, Registrierungsverhalten und Diagnose bei intermittierenden Fehlern.
